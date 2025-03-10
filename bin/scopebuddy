@@ -2,6 +2,14 @@
 # Special thanks to @coolavery for the initial script for this
 # https://github.com/ValveSoftware/gamescope/issues/835#issuecomment-2496383830
 #
+# Initial 1.0.0 version was not possible without the help of
+# * @coolavery
+# * @HikariKnight
+# * @Zeglius
+# * @tulilirockz
+# * @EPOCHvoyager
+# * @wolfyreload
+#
 # Purpose of this script:
 # * Allow launching gamescope with a default set of environment variables and gamescope args set by the user
 #   "~/.config/scopebuddy/scb.conf" will be created with examples after first run
