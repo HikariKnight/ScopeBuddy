@@ -19,7 +19,6 @@ Features:
 * Enables you to define per-game arguments for gamescope
 * Enables you to define global and per-game ENV variables
 * Optionally use scb just for ENV var management
-* Bash scripting support!
 
 ## Documentaion and usage
 Look at https://docs.bazzite.gg/Advanced/scopebuddy/
@@ -31,21 +30,26 @@ Look at https://docs.bazzite.gg/Advanced/scopebuddy/
 * [gamescope](https://github.com/ValveSoftware/gamescope)
 * perl
 
-Using curl:
+#### Using curl:
 ```bash
 sudo curl -Lo /usr/local/bin/scopebuddy https://raw.githubusercontent.com/HikariKnight/ScopeBuddy/refs/heads/main/bin/scopebuddy
 sudo chmod +x /usr/local/bin/scopebuddy
-sudo ln -s scopebuddy /usr/local/bin/scb
 ```
 
-Using wget:
+#### Using wget:
 ```bash
 sudo wget -O /usr/local/bin/scopebuddy https://raw.githubusercontent.com/HikariKnight/ScopeBuddy/refs/heads/main/bin/scopebuddy
 sudo chmod +x /usr/local/bin/scopebuddy
+```
+
+#### Make `scb` symlink because we love short commands
+NOTE: You only need to do this once
+
+```bash
 sudo ln -s scopebuddy /usr/local/bin/scb
 ```
 
-Specific version:
+#### Specific version:
 * Download the versioned release from github releases
 * Extract the script
 * Move to /usr/local/bin or /usr/bin
