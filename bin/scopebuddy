@@ -15,7 +15,7 @@
 #   "~/.config/scopebuddy/scb.conf" will be created with examples after first run
 # * Serve as a temporary workaround for fixing the steam overlay when using nested gamescope on desktop steam until fixed upstream
 set -eo pipefail
-SCB_VER="1.0.1"
+SCB_VER="1.1.0"
 echo "Running ScopeBuddy version: $SCB_VER"
 
 gamescope_opts=""
