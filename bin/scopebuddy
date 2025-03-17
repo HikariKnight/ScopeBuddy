@@ -96,6 +96,8 @@ if [ -f "$SCB_CONFIGFILE" ]; then
         gamescope_opts=$SCB_GAMESCOPE_ARGS
     fi
 
+    # Helper func to fail fast if the user is trying to set KDE_AUTO_ARGS
+    # but doesn't have the right pre-reqs installed or isn't in KDE.
     kde_auto_args_preflight() {
         if [ -z "$SCB_KDE_AUTO_ARGS" ]; then
             return 1
@@ -120,80 +122,46 @@ if [ -f "$SCB_CONFIGFILE" ]; then
         return 0
     }
 
-    # Don't bother trying to do KDE auto arg stuff unless we're in a KDE session,
-    # and have the env var specified and the deps installed.
     if kde_auto_args_preflight; then
-        kde_get_current_mode_id() {
-            kde_get_screen_info | jq -r '
+        # if multidisplay, sort to get the "primary". KDE settings uses 
+        # a boolean style "primary" toggle, but kscreen uses each display 
+        # with a "priority" int.
+        kde_get_primary_display() {
+            kscreen-doctor -j | jq -c '
                 if (.outputs | length) == 1 then
-                    .outputs[0].currentModeId
+                    .outputs[0]
                 else
-                    .outputs[] | select(.enabled == true and .primary == true) | .currentModeId
+                    (.outputs | map(select(.enabled == true)) | sort_by(.priority))[0]
                 end
             '
         }
-
         kde_get_mode_info() {
-            local mode_id="$1"
-            kde_get_screen_info | jq -r --arg mode_id "$mode_id" '
-                if (.outputs | length) == 1 then
-                    .outputs[0].modes[] | select(.id == $mode_id) | {width: .size.width, height: .size.height, refresh: .refreshRate}
-                else
-                    .outputs[] | select(.enabled == true and .primary == true) | .modes[] | select(.id == $mode_id) | {width: .size.width, height: .size.height, refresh: .refreshRate}
-                end
+            mode_id=$(kde_get_primary_display | jq -r '.currentModeId')
+            kde_get_primary_display | jq -r --arg mode_id "$mode_id" '
+                .modes[] | select(.id == $mode_id) | {width: .size.width, height: .size.height, refresh: .refreshRate}
             '
         }
-        kde_get_hdr_state() {
-          kde_get_screen_info | jq -r '.outputs[] | select(.enabled == true) | .hdr'
-        }
-
-        # Function to get the VRR (adaptive sync) state of the enabled display
-        kde_get_vrr_state() {
-          kde_get_screen_info | jq -r '.outputs[] | select(.enabled == true) | .vrrPolicy'
-        }
-
-        # Function to get current screen information in JSON format
-        kde_get_screen_info() {
-          kscreen-doctor -j
-        }
-
-        # Extract width, height, and refresh rate from mode info for the enabled output
-        kde_get_width() {
-          echo "$1" | jq -r '.width'
-        }
-
-        kde_get_height() {
-          echo "$1" | jq -r '.height'
-        }
-
-        kde_get_refresh_rate() {
-          echo "$1" | jq -r '.refresh'
-        }
-        mode_id=$(kde_get_current_mode_id)
-        mode_info=$(kde_get_mode_info "$mode_id")
-
-        KDE_WIDTH=$(kde_get_width "$mode_info")
-        KDE_HEIGHT=$(kde_get_height "$mode_info")
-        KDE_REFRESH=$(kde_get_refresh_rate "$mode_info")
-
-        HDR_STATE=$(kde_get_hdr_state)
-        VRR_STATE=$(kde_get_vrr_state)
+        # hdr and vrr data are stored on the display
+        KDE_HDR_STATE=$(kde_get_primary_display | jq -r '.hdr')
+        KDE_VRR_STATE=$(kde_get_primary_display | jq -r '.vrrPolicy')
+        # width/height/refresh are mode-specifc values
+        KDE_WIDTH=$(kde_get_mode_info | jq -r '.width')
+        KDE_HEIGHT=$(kde_get_mode_info | jq -r '.height')
+        KDE_REFRESH=$(kde_get_mode_info | jq -r '.refresh')
 
         # Remove any existing width (-W), height (-H), or refresh (-r) flags from gamescope_opts.
         # We will replace them with the inferred values from kscreen-doctor in a few lines.
         if [ -n "$gamescope_opts" ]; then
             gamescope_opts=$(echo "$gamescope_opts" | sed -E 's/ *-W[[:space:]]*[0-9]+//g; s/ *-H[[:space:]]*[0-9]+//g; s/ *-r[[:space:]]*[0-9]+//g')
         fi
-
         gamescope_opts="-W $KDE_WIDTH -H $KDE_HEIGHT -r $KDE_REFRESH"
-        if [[ "$HDR_STATE" == "true" ]]; then
+        if [[ "$KDE_HDR_STATE" == "true" ]]; then
             if ! echo "$gamescope_opts" | grep -q -- '--hdr-enabled'; then
                 gamescope_opts="$gamescope_opts --hdr-enabled"
             fi
         fi
-
         # 1 and 2 captures "auto" and "always enabled" vrr modes
-        if [[ "$VRR_STATE" == 1 || "$VRR_STATE" == 2 ]]; then
+        if [[ "$KDE_VRR_STATE" == 1 || "$KDE_VRR_STATE" == 2 ]]; then
             if ! echo "$gamescope_opts" | grep -q -- '--adaptive-sync'; then
                 gamescope_opts="$gamescope_opts --adaptive-sync"
             fi
