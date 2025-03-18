@@ -188,14 +188,14 @@ if [ -f "$SCB_CONFIGFILE" ]; then
         # shellcheck disable=SC1090
         source "$SCB_CONFIGDIR/AppID/${STEAM_APPID}.conf"
     fi
-  
+
     # If the user has supplied ANY args to gamescope, do not load the SCB_GAMESCOPE_ARGS
     if [ -z "$gamescope_opts" ]; then
         gamescope_opts=$SCB_GAMESCOPE_ARGS
     fi
 
     # kde_auto_args_preflight will fail fast if the user doesn't have deps installed.
-    if kde_auto_args_preflight; then
+    if [ -n "$SCB_KDE_AUTO_ARGS" ] && kde_auto_args_preflight; then
         # hdr and vrr data are stored on the display
         KDE_HDR_STATE=$(kde_get_primary_display | jq -r '.hdr')
         KDE_VRR_STATE=$(kde_get_primary_display | jq -r '.vrrPolicy')
