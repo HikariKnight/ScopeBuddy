@@ -15,8 +15,12 @@
 #   "~/.config/scopebuddy/scb.conf" will be created with examples after first run
 # * Serve as a temporary workaround for fixing the steam overlay when using nested gamescope on desktop steam until fixed upstream
 set -eo pipefail
-SCB_VER="1.0.0"
-echo "Running ScopeBuddy version: $SCB_VER"
+
+##########
+# Globals
+##########
+
+SCB_VER="1.1.0"
 
 gamescope_opts=""
 command=""
@@ -34,6 +38,100 @@ SCB_CONFIGDIR="$HOME/.config/scopebuddy"
 # By default we will never be in gamemode
 SCB_GAMEMODE=0
 
+###################
+# Helper functions
+###################
+
+# Appends a substring to $gamescope_apts if it doesn't already exist
+# Usage:
+#    gamescope_opts=$(verify_or_append_arg "$gamescope_opts" "<TARGET>")
+# Params:
+#    $1: (Required) original $gamescope_opts argument string, ex: "-H 1920 -W 1080 --mangoapp" 
+#    $2: (Required) target substring. Ex: "--hdr-enabled"). If not found, it will be appended. 
+verify_or_append_arg() {
+    local argstring="$1"
+    local target="$2"
+    # append if the value doesn't exist.
+    if ! echo "$argstring" | grep -F -q -- "$target"; then
+        argstring="$argstring $target"
+    fi
+    echo "$argstring"
+}
+# Uses sed to replace a target string if it exists, or append it to the args if it doesn't.
+# Usage:
+#    gamescope_opts=$(replace_or_append_arg "$gamescope_opts" "<TARGET>" "<REPLACEMENT>")
+# Params:
+#    $1: (Required) original $gamescope_opts argument string, ex: "-H 1920 -W 1080 --mangoapp" 
+#    $2: (Required) target substring. sed extended regex format, ex: "-H[[:space:]]*[0-9]+" (matches strings like "-H 1920") 
+#    $3: (Required) replacement substring. Ex: "-H 3440". If $target is not found, this value will be appended.
+replace_or_append_arg() {
+    local argstring="$1"
+    local target="$2"
+    local replacement="$3"
+    if echo "$argstring" | grep -E -q -- "$target"; then
+        # Replace all occurrences of the target with the replacement.
+        argstring=$(echo "$argstring" | sed -E "s/${target}/${replacement}/g")
+    else
+        # Append the replacement value if the target is not found in the original argstring.
+        argstring="$argstring $replacement"
+    fi
+    echo "$argstring"
+}
+# Validates capability to run $KDE_AUTO_ARGS
+# Returns 0 and logs if any dependency is missing.
+kde_auto_args_preflight() {
+    if [ -z "$SCB_KDE_AUTO_ARGS" ]; then
+        return 1
+    fi
+    local missing=""
+    # Check for KDE session
+    if [ -z "$KDE_FULL_SESSION" ]; then
+        missing+="KDE_FULL_SESSION not set; "
+    fi
+    # Check that jq is available
+    if ! command -v jq >/dev/null 2>&1; then
+        missing+="jq not available; "
+    fi
+    # Check that kscreen-doctor is available
+    if ! command -v kscreen-doctor >/dev/null 2>&1; then
+        missing+="kscreen-doctor not available; "
+    fi
+    if [ -n "$missing" ]; then
+        echo "SCB_KDE_AUTO_ARGS defined but not all required conditions are met: $missing"
+        return 1
+    fi
+    return 0
+}
+# Gets the user's primary display via kscreen-doctor.
+# Returns a single kscreen JSON object for the display obj.
+kde_get_primary_display() {
+    # if multidisplay, sort to get the "primary". KDE's settings panel
+    # has boolean style "primary" toggle, but kscreen uses a "priority" int value.
+    # If there's only one, we just get the first one.
+    kscreen-doctor -j | jq -c '
+        if (.outputs | length) == 1 then
+            .outputs[0]
+        else
+            (.outputs | map(select(.enabled == true)) | sort_by(.priority))[0]
+        end
+    '
+}
+# Selectively extracts mode info from kscreen doctor for use with KDE_AUTO_ARGS.
+# More fields are available on the mode, the jq selection can be updated if more
+# fields are needed later.
+kde_get_mode_info() {
+    # Ensure we're getting the enabled mode for the primary display
+    mode_id=$(kde_get_primary_display | jq -r '.currentModeId')
+    kde_get_primary_display | jq -r --arg mode_id "$mode_id" '
+        .modes[] | select(.id == $mode_id) | {width: .size.width, height: .size.height, refresh: .refreshRate}
+    '
+}
+
+
+#######
+# Main
+#######
+echo "Running ScopeBuddy version: $SCB_VER"
 # If SCB_NOSCOPE is set to 1 and we are not using a custom SCB_CONF
 if [ "$SCB_NOSCOPE" -eq 1 ] && [ "$SCB_CONF" == "scb.conf" ]; then
     # Use noscope.conf for default values
@@ -95,11 +193,35 @@ if [ -f "$SCB_CONFIGFILE" ]; then
     if [ -z "$gamescope_opts" ]; then
         gamescope_opts=$SCB_GAMESCOPE_ARGS
     fi
+
+    # kde_auto_args_preflight will fail fast if the user doesn't have deps installed.
+    if [ -n "$SCB_KDE_AUTO_ARGS" ] && kde_auto_args_preflight; then
+        # hdr and vrr data are stored on the display
+        KDE_HDR_STATE=$(kde_get_primary_display | jq -r '.hdr')
+        KDE_VRR_STATE=$(kde_get_primary_display | jq -r '.vrrPolicy')
+        # width/height/refresh are mode-specifc values
+        KDE_WIDTH=$(kde_get_mode_info | jq -r '.width')
+        KDE_HEIGHT=$(kde_get_mode_info | jq -r '.height')
+        KDE_REFRESH=$(kde_get_mode_info | jq -r '.refresh')
+        gamescope_opts=$(replace_or_append_arg "$gamescope_opts" "-W[[:space:]]*[0-9]+" "-W $KDE_WIDTH")
+        gamescope_opts=$(replace_or_append_arg "$gamescope_opts" "-H[[:space:]]*[0-9]+" "-H $KDE_HEIGHT")
+        gamescope_opts=$(replace_or_append_arg "$gamescope_opts" "-r[[:space:]]*[0-9]+" "-r $KDE_REFRESH")
+        if [[ "$KDE_HDR_STATE" == "true" ]]; then
+            gamescope_opts=$(verify_or_append_arg "$gamescope_opts" "--hdr-enabled")
+        fi
+        if [[ "$KDE_VRR_STATE" == 1 || "$KDE_VRR_STATE" == 2 ]]; then
+            gamescope_opts=$(verify_or_append_arg "$gamescope_opts" "--adaptive-sync")
+        fi
+    fi
+
 else
     # Make the default config file
     if [ ! -d "$SCB_CONFIGDIR/AppID" ]; then
         mkdir -p "$SCB_CONFIGDIR/AppID"
     fi
+    # TODO: this content is functionally impossible to update for existing users, so it's maybe
+    # not a great place to stuff README-style content. Once the file is created they'll never get new
+    # versions on subsequent scopebuddy releases.
     cat << 'EOF' > "$SCB_CONFIGFILE"
 # This is the config file that let's you assign defaults for gamescope when using the scopebuddy script
 # lines starting with # are ignored
@@ -114,6 +236,10 @@ else
 # To not use this default set of arguments, just launch scb with SCB_NOSCOPE=1 or just add any gamescope argument before the '-- %command%' then this variable will be ignored
 #SCB_GAMESCOPE_ARGS="--mangoapp -f -w 2560 -h 1440 -W 2560 -H 1440 -r 180 --force-grab-cursor --hdr-enabled -e"
 #
+# To auto-detect KDE display width, height, refresh, VRR and HDR states, you can use SCB_KDE_AUTO_ARGS
+# This var will override any previously set values for -W, -H, -r with the correct values for your primary display.
+# It will also automaticallyand append --hdr-enabled and --adaptive-sync/--enable-vrr-modesetting depending on display support.
+#SCB_KDE_AUTO_ARGS=true
 ###
 ## FOR ADVANCED USE INSIDE AN APPID CONFIG
 ###
