@@ -207,15 +207,11 @@ if [ -f "$SCB_CONFIGFILE" ]; then
     PREFER_OUTPUT=$(echo "$gamescope_opts" | sed -nE 's/.*(-O|--prefer-output)[[:space:]]+([^[:space:]]+).*/\2/p')
     # kde_auto_args_preflight will fail fast if the user doesn't have deps installed.
     if [ "$SCB_AUTO_RES" -eq 1 ] && kde_auto_args_preflight; then
-        # width/height/refresh are mode-specifc values
+        # width/height are mode-specifc values
         KDE_WIDTH=$(kde_get_mode_info "$PREFER_OUTPUT" | jq -r '.width')
         KDE_HEIGHT=$(kde_get_mode_info "$PREFER_OUTPUT" | jq -r '.height')
         gamescope_opts=$(replace_or_append_arg "$gamescope_opts" "-W[[:space:]]*[0-9]+" "-W $KDE_WIDTH")
         gamescope_opts=$(replace_or_append_arg "$gamescope_opts" "-H[[:space:]]*[0-9]+" "-H $KDE_HEIGHT")
-    fi
-    if [ "$SCB_AUTO_FRAME_LIMIT" -eq 1 ] && kde_auto_args_preflight; then
-        KDE_REFRESH=$(kde_get_mode_info "$PREFER_OUTPUT" | jq -r '.refresh')
-        gamescope_opts=$(replace_or_append_arg "$gamescope_opts" "-r[[:space:]]*[0-9]+" "-r $KDE_REFRESH")
     fi
     if [ "$SCB_AUTO_HDR" -eq 1 ] && kde_auto_args_preflight; then
         KDE_HDR_STATE=$(kde_get_primary_display "$PREFER_OUTPUT" | jq -r '.hdr')
@@ -252,10 +248,10 @@ else
 # To not use this default set of arguments, just launch scb with SCB_NOSCOPE=1 or just add any gamescope argument before the '-- %command%' then this variable will be ignored
 #SCB_GAMESCOPE_ARGS="--mangoapp -f -w 2560 -h 1440 -W 2560 -H 1440 -r 180 --force-grab-cursor --hdr-enabled -e"
 #
-# To auto-detect KDE display width, height, refresh, VRR and HDR states, you can use SCB_AUTO_* {RES|FRAME_LIMIT|HDR|VRR}
-# This var will override any previously set values for -W, -H, -r with the correct values for your primary display, or
-# append --hdr-enabled and --adaptive-sync automatically depending on the current settings for your active display, or the display chosen
-# with -O / --prefer-output flags in gamescsope.
+# To auto-detect KDE display width, height, refresh, VRR and HDR states, you can use SCB_AUTO_* {RES|HDR|VRR}
+# These vars will override any previously set values for -W and -H or append --hdr-enabled and --adaptive-sync
+# automatically depending on the current settings for your active display, or the display chosen with -O /
+# --prefer-output flags in gamescsope.
 #SCB_AUTO_RES=1
 #SCB_AUTO_HDR=1
 #SCB_AUTO_VRR=1
