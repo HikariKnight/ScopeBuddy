@@ -296,7 +296,7 @@ else
               mv "$FILE.tmp" "$FILE"
             fi
         fi
-        echo "$LOGLINE" >> "$SCB_LOGFILE"
+        echo -e "$LOGLINE\n" >> "$SCB_LOGFILE"
     fi
     eval "env -u LD_PRELOAD $GAMESCOPE_BIN $gamescope_opts -- env LD_PRELOAD=$LD_PRELOAD_REAL $command"
 fi
