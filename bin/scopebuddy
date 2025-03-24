@@ -256,6 +256,8 @@ else
 #SCB_AUTO_HDR=1
 #SCB_AUTO_VRR=1
 #SCB_AUTO_FRAME_LIMIT=1
+# To debug scopebuddy output, uncomment the following line. After launching games, the executed cmd will be output to ~/.config/scopebuddy/scopebuddy.log
+#SCB_DEBUG=1
 ###
 ## FOR ADVANCED USE INSIDE AN APPID CONFIG
 ###
@@ -281,6 +283,20 @@ else
     LD_PRELOAD_REAL=$LD_PRELOAD
 
     # Unset LD_PRELOAD for gamescope (as it breaks the overlay) then start gamescope with LD_PRELOAD set for %command% instead
-    echo "Launching: env -u LD_PRELOAD $GAMESCOPE_BIN $gamescope_opts -- env LD_PRELOAD=$LD_PRELOAD_REAL $command"
+    LOGLINE="Launching: env -u LD_PRELOAD $GAMESCOPE_BIN $gamescope_opts -- env LD_PRELOAD=$LD_PRELOAD_REAL $command"
+    echo "$LOGLINE"
+    if [ "$SCB_DEBUG" -eq 1 ]; then
+        SCB_LOGFILE="$SCB_CONFIGDIR/scopebuddy.log"
+        if [ -f "$FILE" ]; then
+            # Count the total number of lines in the file
+            LINE_COUNT=$(wc -l < "$SCB_LOGFILE")
+            # If there are more than 100 lines, retain only the last 100 lines
+            if [ "$LINE_COUNT" -gt 100 ]; then
+              tail -n 100 "$FILE" > "$FILE.tmp"
+              mv "$FILE.tmp" "$FILE"
+            fi
+        fi
+        echo "$LOGLINE" >> "$SCB_LOGFILE"
+    fi
     eval "env -u LD_PRELOAD $GAMESCOPE_BIN $gamescope_opts -- env LD_PRELOAD=$LD_PRELOAD_REAL $command"
 fi
