@@ -38,6 +38,14 @@ SCB_CONFIGDIR="$HOME/.config/scopebuddy"
 # By default we will never be in gamemode
 SCB_GAMEMODE=0
 
+# Default off for SCB_DEBUG
+SCB_DEBUG=${SCB_DEBUG:-0}
+
+# Default off for SCB_AUTO_*
+SCB_AUTO_RES=${SCB_AUTO_RES:-0}
+SCB_AUTO_HDR=${SCB_AUTO_HDR:-0}
+SCB_AUTO_VRR=${SCB_AUTO_VRR:-0}
+
 ###################
 # Helper functions
 ###################
@@ -77,7 +85,7 @@ replace_or_append_arg() {
     fi
     echo "$argstring"
 }
-# Validates capability to run $KDE_AUTO_ARGS
+# Validates capability to run $SCB_AUTO_*
 # Returns 0 and logs if any dependency is missing.
 kde_auto_args_preflight() {
     local missing=""
@@ -94,7 +102,7 @@ kde_auto_args_preflight() {
         missing+="kscreen-doctor not available; "
     fi
     if [ -n "$missing" ]; then
-        echo "SCB_KDE_AUTO_ARGS defined but not all required conditions are met: $missing"
+        echo "An SCB_AUTO_* argument was passed (auto res, auto hdr, auto vrr) but the following dependencies failed: $missing"
         return 1
     fi
     return 0
@@ -123,7 +131,7 @@ kde_get_primary_display() {
         '
     fi
 }
-# Selectively extracts mode info from kscreen doctor for use with KDE_AUTO_ARGS.
+# Selectively extracts mode info from kscreen doctor for use with SCB_AUTO_*.
 # More fields are available on the mode, the jq selection can be updated if more
 # fields are needed later.
 kde_get_mode_info() {
@@ -255,7 +263,6 @@ else
 #SCB_AUTO_RES=1
 #SCB_AUTO_HDR=1
 #SCB_AUTO_VRR=1
-#SCB_AUTO_FRAME_LIMIT=1
 # To debug scopebuddy output, uncomment the following line. After launching games, the executed cmd will be output to ~/.config/scopebuddy/scopebuddy.log
 #SCB_DEBUG=1
 ###
