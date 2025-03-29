@@ -19,6 +19,7 @@ Features:
 * Enables you to define per-game arguments for gamescope
 * Enables you to define global and per-game ENV variables
 * Optionally use scb just for ENV var management
+* Automatically infer display output args (output width, height, refresh rate, HDR, or VRR flags) from primary display (KDE only)
 
 ## Documentaion and usage
 Look at https://docs.bazzite.gg/Advanced/scopebuddy/
@@ -29,6 +30,10 @@ Look at https://docs.bazzite.gg/Advanced/scopebuddy/
 * bash
 * [gamescope](https://github.com/ValveSoftware/gamescope)
 * perl
+
+if using `$SCB_AUTO_RES`/`$SCB_AUTO_HDR`/`$SCB_AUTO_VRR`:
+* `jq` (installed by default on Bazzite - other distros may need to install manually)
+* KDE Plasma desktop (Gnome support coming soon)
 
 #### Using curl:
 ```bash
