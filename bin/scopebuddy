@@ -276,6 +276,24 @@ else
 EOF
 fi
 
+
+pre_command() {
+  if [[ -n "$SCB_PRE_COMMAND" ]]; then
+    echo "Executing pre-command: $SCB_PRE_COMMAND"
+    eval "$SCB_PRE_COMMAND" || echo "Warning: SCB_PRE_COMMAND failed!"
+  fi
+}
+
+post_command() {
+  if [[ -n "$SCB_POST_COMMAND" ]]; then
+    echo "Executing post-command: $SCB_POST_COMMAND"
+    eval "$SCB_POST_COMMAND"
+  fi
+}
+
+# Bind post_command to exit signal
+trap post_command EXIT
+
 # If SCB_NOSCOPE is set to 1
 if [ "$SCB_NOSCOPE" -eq 1 ]; then
     # If we are potentially in gamemode
@@ -296,5 +314,7 @@ else
         SCB_LOGFILE="$SCB_CONFIGDIR/scopebuddy.log"
         echo -e "$LOGLINE" > "$SCB_LOGFILE"
     fi
+    # run pre_command before gamescope gets exec'd. will proceed even if pre_command fails.
+    pre_command
     eval "env -u LD_PRELOAD $GAMESCOPE_BIN $gamescope_opts -- env LD_PRELOAD=$LD_PRELOAD_REAL $command"
 fi
