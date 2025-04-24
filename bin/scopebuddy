@@ -218,8 +218,13 @@ if [ -f "$SCB_CONFIGFILE" ]; then
         # width/height are mode-specifc values
         KDE_WIDTH=$(kde_get_mode_info "$PREFER_OUTPUT" | jq -r '.width')
         KDE_HEIGHT=$(kde_get_mode_info "$PREFER_OUTPUT" | jq -r '.height')
-        gamescope_opts=$(replace_or_append_arg "$gamescope_opts" "-W[[:space:]]*[0-9]+" "-W $KDE_WIDTH")
-        gamescope_opts=$(replace_or_append_arg "$gamescope_opts" "-H[[:space:]]*[0-9]+" "-H $KDE_HEIGHT")
+        KDE_REFRESH=$(printf "%.0f" $(kde_get_mode_info "$PREFER_OUTPUT" | jq -r '.refresh'))
+
+        flags=("-W" "-H" "-r")
+        values=("$KDE_WIDTH" "$KDE_HEIGHT" "$KDE_REFRESH")
+        for i in "${!flags[@]}"; do
+            gamescope_opts=$(replace_or_append_arg "$gamescope_opts" "${flags[$i]}[[:space:]]*[0-9]+" "${flags[$i]} ${values[$i]}")
+        done
     fi
     if [ "$SCB_AUTO_HDR" -eq 1 ] && kde_auto_args_preflight; then
         KDE_HDR_STATE=$(kde_get_primary_display "$PREFER_OUTPUT" | jq -r '.hdr')
