@@ -156,7 +156,7 @@ fi
 
 # If steam is potentially running inside gamescope
 # shellcheck disable=SC2009
-if ps ax | grep -P "steam.sh -.+ -steampal" | grep -v grep || pgrep -f "gamescope-session" ; then
+if ps ax | grep -P "steam.sh -.+ -steampal" | grep -v grep || [ "$XDG_CURRENT_DESKTOP" = "gamescope" ] ; then
     # If steam is potentially running in gamemode
     # Force SCB_NOSCOPE to 1
     SCB_NOSCOPE=1
