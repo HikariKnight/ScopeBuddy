@@ -1,4 +1,7 @@
 # ScopeBuddy - GNOME
+
+Forked From: [HikariKnight](https://github.com/HikariKnight/ScopeBuddy)
+
 A manager script to make gamescope easier to use on the desktop (or if you use it in desktop mode and gamemode)
 
 Originally made for [Bazzite](https://bazzite.gg), modified to support Gnome Desktops, possibly others that have display information that can be found with xrandr. 
