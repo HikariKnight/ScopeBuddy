@@ -85,7 +85,19 @@ replace_or_append_arg() {
     fi
     echo "$argstring"
 }
-# Validates capability to run $SCB_AUTO_*
+# Detects the current desktop environment
+# Returns "kde", "gnome", or "unknown"
+detect_desktop_environment() {
+    if [ -n "$KDE_FULL_SESSION" ]; then
+        echo "kde"
+    elif [ "$XDG_CURRENT_DESKTOP" = "GNOME" ] || [ "$DESKTOP_SESSION" = "gnome" ]; then
+        echo "gnome"
+    else
+        echo "unknown"
+    fi
+}
+
+# Validates capability to run $SCB_AUTO_* on KDE
 # Returns 0 and logs if any dependency is missing.
 kde_auto_args_preflight() {
     local missing=""
@@ -106,6 +118,50 @@ kde_auto_args_preflight() {
         return 1
     fi
     return 0
+}
+
+# Validates capability to run $SCB_AUTO_* on GNOME
+# Returns 0 and logs if any dependency is missing.
+gnome_auto_args_preflight() {
+    local missing=""
+    # Check for GNOME session
+    if [ "$XDG_CURRENT_DESKTOP" != "GNOME" ] && [ "$DESKTOP_SESSION" != "gnome" ]; then
+        missing+="Not running GNOME session; "
+    fi
+    # Check that jq is available
+    if ! command -v jq >/dev/null 2>&1; then
+        missing+="jq not available; "
+    fi
+    # Check for available display query tools
+    if ! command -v xrandr >/dev/null 2>&1 && ! command -v wlr-randr >/dev/null 2>&1 && ! command -v gnome-randr >/dev/null 2>&1; then
+        missing+="No supported display tool available (need xrandr, wlr-randr, or gnome-randr); "
+    fi
+    # Check that gsettings is available
+    if ! command -v gsettings >/dev/null 2>&1; then
+        missing+="gsettings not available; "
+    fi
+    if [ -n "$missing" ]; then
+        echo "An SCB_AUTO_* argument was passed (auto res, auto hdr, auto vrr) but the following dependencies failed: $missing"
+        return 1
+    fi
+    return 0
+}
+
+# Generic auto args preflight that works for both KDE and GNOME
+auto_args_preflight() {
+    local desktop_env=$(detect_desktop_environment)
+    case "$desktop_env" in
+        "kde")
+            kde_auto_args_preflight
+            ;;
+        "gnome")
+            gnome_auto_args_preflight
+            ;;
+        *)
+            echo "SCB_AUTO_* features are only supported on KDE and GNOME desktop environments"
+            return 1
+            ;;
+    esac
 }
 # Gets the user's primary display via kscreen-doctor.
 # Returns a single kscreen JSON object for the display obj.
@@ -141,6 +197,250 @@ kde_get_mode_info() {
     kde_get_primary_display | jq -r --arg mode_id "$mode_id" '
         .modes[] | select(.id == $mode_id) | {width: .size.width, height: .size.height, refresh: .refreshRate}
     '
+}
+
+# Gets the user's primary display info for GNOME
+# Returns a JSON object for the primary display.
+gnome_get_primary_display() {
+    local prefer="$1"
+    
+    # Try different tools in order of preference
+    if command -v xrandr >/dev/null 2>&1; then
+        # Use xrandr (works on both X11 and some Wayland compositors)
+        local xrandr_output
+        xrandr_output=$(xrandr 2>/dev/null) || xrandr_output=""
+        
+        if [ -n "$xrandr_output" ]; then
+            if [ -n "$prefer" ]; then
+                # Look for specific output
+                echo "$xrandr_output" | awk -v output="$prefer" '
+                $1 == output && /connected/ {
+                    # Extract resolution from the current line
+                    resolution = ""
+                    primary = ($3 == "primary" ? "true" : "false")
+                    if (match($0, /([0-9]+)x([0-9]+)/, res_arr)) {
+                        resolution = res_arr[1] "x" res_arr[2]
+                        width = res_arr[1]
+                        height = res_arr[2]
+                    }
+                    # Look for refresh rate in next line with *+ or *
+                    getline nextline
+                    refresh = "60.0"
+                    if (match(nextline, /([0-9]+\.[0-9]+)\*/, ref_arr)) {
+                        refresh = ref_arr[1]
+                    }
+                    if (width && height) {
+                        printf "{\"name\":\"%s\",\"width\":%s,\"height\":%s,\"refresh\":%s,\"primary\":%s}\n", 
+                               output, width, height, refresh, primary
+                    }
+                }'
+            else
+                # Look for primary output, fallback to first connected
+                echo "$xrandr_output" | awk '
+                /connected/ {
+                    name = $1
+                    primary = ($3 == "primary" ? "true" : "false")
+                    # Extract resolution from the current line
+                    width = ""
+                    height = ""
+                    if (match($0, /([0-9]+)x([0-9]+)/, res_arr)) {
+                        width = res_arr[1]
+                        height = res_arr[2]
+                    }
+                    
+                    # Store first connected display info
+                    if (!found_any) {
+                        first_name = name
+                        first_width = width
+                        first_height = height
+                        first_primary = primary
+                        found_any = 1
+                    }
+                    
+                    # Store primary display info if found
+                    if (primary == "true") {
+                        primary_name = name
+                        primary_width = width
+                        primary_height = height
+                        primary_primary = primary
+                        found_primary = 1
+                        
+                        # Look for refresh rate in next line
+                        getline nextline
+                        refresh = "60.0"
+                        if (match(nextline, /([0-9]+\.[0-9]+)\*/, ref_arr)) {
+                            refresh = ref_arr[1]
+                        }
+                        primary_refresh = refresh
+                    } else if (!found_primary && found_any == 1) {
+                        # Get refresh rate for first display if no primary found yet
+                        getline nextline
+                        refresh = "60.0"
+                        if (match(nextline, /([0-9]+\.[0-9]+)\*/, ref_arr)) {
+                            refresh = ref_arr[1]
+                        }
+                        first_refresh = refresh
+                    }
+                }
+                END {
+                    if (found_primary) {
+                        printf "{\"name\":\"%s\",\"width\":%s,\"height\":%s,\"refresh\":%s,\"primary\":%s}\n", 
+                               primary_name, primary_width, primary_height, primary_refresh, primary_primary
+                    } else if (found_any) {
+                        printf "{\"name\":\"%s\",\"width\":%s,\"height\":%s,\"refresh\":%s,\"primary\":%s}\n", 
+                               first_name, first_width, first_height, (first_refresh ? first_refresh : "60.0"), first_primary
+                    } else {
+                        print "{}"
+                    }
+                }'
+            fi
+            return
+        fi
+    fi
+    
+    # Try wlr-randr for wlroots-based compositors
+    if command -v wlr-randr >/dev/null 2>&1; then
+        local wlr_output
+        wlr_output=$(wlr-randr 2>/dev/null) || wlr_output=""
+        
+        if [ -n "$wlr_output" ]; then
+            if [ -n "$prefer" ]; then
+                echo "$wlr_output" | awk -v output="$prefer" '
+                $1 == output {
+                    getline
+                    if (match($0, /([0-9]+)x([0-9]+).*@([0-9]+\.[0-9]+)Hz/, arr)) {
+                        printf "{\"name\":\"%s\",\"width\":%s,\"height\":%s,\"refresh\":%s,\"primary\":false}\n", 
+                               output, arr[1], arr[2], arr[3]
+                    }
+                }'
+            else
+                echo "$wlr_output" | awk '
+                /^[A-Z]/ && !/Disabled/ {
+                    name = $1
+                    getline
+                    if (match($0, /([0-9]+)x([0-9]+).*@([0-9]+\.[0-9]+)Hz/, arr)) {
+                        printf "{\"name\":\"%s\",\"width\":%s,\"height\":%s,\"refresh\":%s,\"primary\":true}\n", 
+                               name, arr[1], arr[2], arr[3]
+                        exit
+                    }
+                }'
+            fi
+            return
+        fi
+    fi
+    
+    # Try gnome-randr if available
+    if command -v gnome-randr >/dev/null 2>&1; then
+        local grandr_output
+        grandr_output=$(gnome-randr 2>/dev/null) || grandr_output=""
+        
+        if [ -n "$grandr_output" ]; then
+            echo "$grandr_output" | awk -v prefer="$prefer" '
+            /^\*/ || (prefer && $0 ~ prefer) {
+                if (match($0, /([0-9]+)x([0-9]+).*@([0-9]+)/, arr)) {
+                    name = prefer ? prefer : "Primary"
+                    printf "{\"name\":\"%s\",\"width\":%s,\"height\":%s,\"refresh\":%s,\"primary\":true}\n", 
+                           name, arr[1], arr[2], arr[3]
+                    exit
+                }
+            }'
+            return
+        fi
+    fi
+    
+    # Fallback - return empty JSON
+    echo "{}"
+}
+
+# Gets mode info for GNOME displays
+gnome_get_mode_info() {
+    local prefer="$1"
+    gnome_get_primary_display "$prefer" | jq -c 'if .width then {width: .width, height: .height, refresh: .refresh} else {} end'
+}
+
+# Gets HDR status for GNOME displays
+gnome_get_hdr_status() {
+    local prefer="$1"
+    # Check if HDR is enabled via gsettings
+    # Note: HDR support in GNOME is limited and may vary by version
+    local hdr_enabled="false"
+    
+    # Try to get HDR status from gsettings (this may not be available in all GNOME versions)
+    if gsettings list-keys org.gnome.mutter 2>/dev/null | grep -q experimental-features; then
+        if gsettings get org.gnome.mutter experimental-features 2>/dev/null | grep -q hdr; then
+            hdr_enabled="true"
+        fi
+    fi
+    
+    echo "$hdr_enabled"
+}
+
+# Gets VRR status for GNOME displays  
+gnome_get_vrr_status() {
+    local prefer="$1"
+    # Check if VRR/adaptive sync is enabled
+    # Note: VRR support in GNOME may be limited
+    local vrr_enabled="false"
+    
+    # Check for VRR in experimental features
+    if gsettings list-keys org.gnome.mutter 2>/dev/null | grep -q experimental-features; then
+        if gsettings get org.gnome.mutter experimental-features 2>/dev/null | grep -q variable-refresh-rate; then
+            vrr_enabled="true"
+        fi
+    fi
+    
+    echo "$vrr_enabled"
+}
+
+# Generic function to get mode info that works for both KDE and GNOME
+get_mode_info() {
+    local prefer="$1"
+    local desktop_env=$(detect_desktop_environment)
+    case "$desktop_env" in
+        "kde")
+            kde_get_mode_info "$prefer"
+            ;;
+        "gnome")
+            gnome_get_mode_info "$prefer"
+            ;;
+        *)
+            echo "{}"
+            ;;
+    esac
+}
+
+# Generic function to get HDR status that works for both KDE and GNOME
+get_hdr_status() {
+    local prefer="$1"
+    local desktop_env=$(detect_desktop_environment)
+    case "$desktop_env" in
+        "kde")
+            kde_get_primary_display "$prefer" | jq -r '.hdr'
+            ;;
+        "gnome")
+            gnome_get_hdr_status "$prefer"
+            ;;
+        *)
+            echo "false"
+            ;;
+    esac
+}
+
+# Generic function to get VRR status that works for both KDE and GNOME
+get_vrr_status() {
+    local prefer="$1"
+    local desktop_env=$(detect_desktop_environment)
+    case "$desktop_env" in
+        "kde")
+            kde_get_primary_display "$prefer" | jq -r '.vrrPolicy'
+            ;;
+        "gnome")
+            gnome_get_vrr_status "$prefer"
+            ;;
+        *)
+            echo "0"
+            ;;
+    esac
 }
 
 
@@ -213,23 +513,24 @@ if [ -f "$SCB_CONFIGFILE" ]; then
     # Attempt to extract a preferred display from gamescope_opts.
     # This sed command looks for either -O or --prefer-output followed by whitespace and a non‑space value.
     PREFER_OUTPUT=$(echo "$gamescope_opts" | sed -nE 's/.*(-O|--prefer-output)[[:space:]]+([^[:space:]]+).*/\2/p')
-    # kde_auto_args_preflight will fail fast if the user doesn't have deps installed.
-    if [ "$SCB_AUTO_RES" -eq 1 ] && kde_auto_args_preflight; then
+    # auto_args_preflight will fail fast if the user doesn't have deps installed for their DE.
+    if [ "$SCB_AUTO_RES" -eq 1 ] && auto_args_preflight; then
         # width/height are mode-specifc values
-        KDE_WIDTH=$(kde_get_mode_info "$PREFER_OUTPUT" | jq -r '.width')
-        KDE_HEIGHT=$(kde_get_mode_info "$PREFER_OUTPUT" | jq -r '.height')
-        gamescope_opts=$(replace_or_append_arg "$gamescope_opts" "-W[[:space:]]*[0-9]+" "-W $KDE_WIDTH")
-        gamescope_opts=$(replace_or_append_arg "$gamescope_opts" "-H[[:space:]]*[0-9]+" "-H $KDE_HEIGHT")
+        DISPLAY_WIDTH=$(get_mode_info "$PREFER_OUTPUT" | jq -r '.width')
+        DISPLAY_HEIGHT=$(get_mode_info "$PREFER_OUTPUT" | jq -r '.height')
+        gamescope_opts=$(replace_or_append_arg "$gamescope_opts" "-W[[:space:]]*[0-9]+" "-W $DISPLAY_WIDTH")
+        gamescope_opts=$(replace_or_append_arg "$gamescope_opts" "-H[[:space:]]*[0-9]+" "-H $DISPLAY_HEIGHT")
     fi
-    if [ "$SCB_AUTO_HDR" -eq 1 ] && kde_auto_args_preflight; then
-        KDE_HDR_STATE=$(kde_get_primary_display "$PREFER_OUTPUT" | jq -r '.hdr')
-        if [[ "$KDE_HDR_STATE" == "true" ]]; then
+    if [ "$SCB_AUTO_HDR" -eq 1 ] && auto_args_preflight; then
+        DISPLAY_HDR_STATE=$(get_hdr_status "$PREFER_OUTPUT")
+        if [[ "$DISPLAY_HDR_STATE" == "true" ]]; then
             gamescope_opts=$(verify_or_append_arg "$gamescope_opts" "--hdr-enabled")
         fi
     fi
-    if [ "$SCB_AUTO_VRR" -eq 1 ] && kde_auto_args_preflight; then
-        KDE_VRR_STATE=$(kde_get_primary_display "$PREFER_OUTPUT" | jq -r '.vrrPolicy')
-        if [[ "$KDE_VRR_STATE" == 1 || "$KDE_VRR_STATE" == 2 ]]; then
+    if [ "$SCB_AUTO_VRR" -eq 1 ] && auto_args_preflight; then
+        DISPLAY_VRR_STATE=$(get_vrr_status "$PREFER_OUTPUT")
+        # For KDE: VRR policy 1 or 2 means enabled; For GNOME: "true" means enabled
+        if [[ "$DISPLAY_VRR_STATE" == "1" || "$DISPLAY_VRR_STATE" == "2" || "$DISPLAY_VRR_STATE" == "true" ]]; then
             gamescope_opts=$(verify_or_append_arg "$gamescope_opts" "--adaptive-sync")
         fi
     fi
@@ -254,12 +555,17 @@ else
 #
 # Example for providing default gamescope arguments through scopebuddy if no arguments are given to the scopebuddy script, this does not need to be exported.
 # To not use this default set of arguments, just launch scb with SCB_NOSCOPE=1 or just add any gamescope argument before the '-- %command%' then this variable will be ignored
-#SCB_GAMESCOPE_ARGS="--mangoapp -f -w 2560 -h 1440 -W 2560 -H 1440 -r 180 --force-grab-cursor --hdr-enabled -e"
+SCB_GAMESCOPE_ARGS="-f --mangoapp --force-grab-cursor"
 #
-# To auto-detect KDE display width, height, refresh, VRR and HDR states, you can use SCB_AUTO_* {RES|HDR|VRR}
+# To auto-detect display width, height, refresh, VRR and HDR states, you can use SCB_AUTO_* {RES|HDR|VRR}
+# This works on both KDE (using kscreen-doctor) and GNOME (using xrandr/wlr-randr and gsettings)
 # These vars will override any previously set values for -W and -H or append --hdr-enabled and --adaptive-sync
 # automatically depending on the current settings for your active display, or the display chosen with -O /
-# --prefer-output flags in gamescsope.
+# --prefer-output flags in gamescope.
+# 
+# Dependencies:
+# - KDE: kscreen-doctor, jq
+# - GNOME: jq, gsettings, and one of: xrandr, wlr-randr, or gnome-randr
 #SCB_AUTO_RES=1
 #SCB_AUTO_HDR=1
 #SCB_AUTO_VRR=1

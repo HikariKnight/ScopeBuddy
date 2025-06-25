@@ -1,7 +1,7 @@
-# ScopeBuddy
+# ScopeBuddy - GNOME
 A manager script to make gamescope easier to use on the desktop (or if you use it in desktop mode and gamemode)
 
-Originally made for [Bazzite](https://bazzite.gg), released here so more projects can make use of it! ❤️
+Originally made for [Bazzite](https://bazzite.gg), modified to support Gnome Desktops, possibly others that have display information that can be found with xrandr. 
 
 Turn this
 
@@ -30,20 +30,24 @@ Look at https://docs.bazzite.gg/Advanced/scopebuddy/
 * bash
 * [gamescope](https://github.com/ValveSoftware/gamescope)
 * perl
+* xrandr
+* wlr-randr
+* x11-xserver-utils
 
 if using `$SCB_AUTO_RES`/`$SCB_AUTO_HDR`/`$SCB_AUTO_VRR`:
 * `jq` (installed by default on Bazzite - other distros may need to install manually)
-* KDE Plasma desktop (Gnome support coming soon)
+* KDE Plasma desktop 
+* GNOME desktop
 
 #### Using curl:
 ```bash
-sudo curl -Lo /usr/local/bin/scopebuddy https://raw.githubusercontent.com/HikariKnight/ScopeBuddy/refs/heads/main/bin/scopebuddy
+sudo curl -Lo /usr/local/bin/scopebuddy https://raw.githubusercontent.com/theronlindsay/ScopeBuddyGNOME/refs/heads/main/bin/scopebuddy
 sudo chmod +x /usr/local/bin/scopebuddy
 ```
 
 #### Using wget:
 ```bash
-sudo wget -O /usr/local/bin/scopebuddy https://raw.githubusercontent.com/HikariKnight/ScopeBuddy/refs/heads/main/bin/scopebuddy
+sudo wget -O /usr/local/bin/scopebuddy https://raw.githubusercontent.com/theronlindsay/ScopeBuddyGNOME/refs/heads/main/bin/scopebuddy
 sudo chmod +x /usr/local/bin/scopebuddy
 ```
 
