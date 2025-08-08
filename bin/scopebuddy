@@ -31,9 +31,12 @@ SCB_NOSCOPE=${SCB_NOSCOPE:-0}
 # Set default gamescope binary
 GAMESCOPE_BIN=${GAMESCOPE_BIN:-gamescope}
 
+# Set default home config directory
+XDG_CONFIG_HOME=${XDG_CONFIG_HOME:-$HOME/.config}
+
 # Configure SCB config
 SCB_CONF=${SCB_CONF:-"scb.conf"}
-SCB_CONFIGDIR="$HOME/.config/scopebuddy"
+SCB_CONFIGDIR="$XDG_CONFIG_HOME/scopebuddy"
 
 # By default we will never be in gamemode
 SCB_GAMEMODE=0
