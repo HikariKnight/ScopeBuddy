@@ -19,8 +19,7 @@ set -eo pipefail
 ##########
 # Globals
 ##########
-
-SCB_VER="1.1.1"
+SCB_VER="1.2.0"
 
 gamescope_opts=""
 command=""
@@ -31,9 +30,11 @@ SCB_NOSCOPE=${SCB_NOSCOPE:-0}
 # Set default gamescope binary
 GAMESCOPE_BIN=${GAMESCOPE_BIN:-gamescope}
 
+# Set default gdctl command for GNOME
+GDCTL_COMMAND=${GDCTL_COMMAND:-gdctl}
+
 # Set default home config directory
 XDG_CONFIG_HOME=${XDG_CONFIG_HOME:-$HOME/.config}
-
 # Configure SCB config
 SCB_CONF=${SCB_CONF:-"scb.conf"}
 SCB_CONFIGDIR="$XDG_CONFIG_HOME/scopebuddy"
@@ -110,6 +111,28 @@ kde_auto_args_preflight() {
     fi
     return 0
 }
+# Validates capability to run $SCB_AUTO_* on GNOME
+# Returns 0 and logs if any dependency is missing.
+gnome_auto_args_preflight() {
+    local missing=""
+    # Check for GNOME session
+    if [ "$XDG_CURRENT_DESKTOP" != "GNOME" ] && [ "$DESKTOP_SESSION" != "gnome" ]; then
+        missing+="Not running GNOME desktop session; "
+    fi
+    # Check that jq is available
+    if ! command -v jq >/dev/null 2>&1; then
+        missing+="jq not available; "
+    fi
+    # Check that gdctl is available (using GDCTL_COMMAND which can be customized)
+    if ! command -v "$GDCTL_COMMAND" >/dev/null 2>&1; then
+        missing+="$GDCTL_COMMAND not available; "
+    fi
+    if [ -n "$missing" ]; then
+        echo "An SCB_AUTO_* argument was passed (auto res, auto hdr, auto vrr) but the following dependencies failed: $missing"
+        return 1
+    fi
+    return 0
+}
 # Gets the user's primary display via kscreen-doctor.
 # Returns a single kscreen JSON object for the display obj.
 kde_get_primary_display() {
@@ -143,6 +166,33 @@ kde_get_mode_info() {
     mode_id=$(kde_get_primary_display "$prefer"| jq -r '.currentModeId')
     kde_get_primary_display | jq -r --arg mode_id "$mode_id" '
         .modes[] | select(.id == $mode_id) | {width: .size.width, height: .size.height, refresh: .refreshRate}
+    '
+}
+# Gets the user's primary display via gdctl for GNOME.
+# Returns a single JSON object for the display.
+gnome_get_primary_display() {
+    # we want to respect user settings for -O or --prefer-output.
+    # if so, just get that by connector name.
+    local prefer="$1"
+    local gdctl_output=$("$GDCTL_COMMAND" show --format json --current-mode --properties)
+    if [ -n "$prefer" ]; then
+        # Try to select the output by its connector name
+        echo "$gdctl_output" | jq -c --arg prefer "$prefer" '
+            .monitors | to_entries[] | select(.value.connector == $prefer) | .value
+        '
+    else
+        # Get the primary display from logical_monitors
+        echo "$gdctl_output" | jq -c '
+            (.logical_monitors[] | select(.primary == true) | .monitors[0]) as $primary_name |
+            .monitors | to_entries[] | select(.key == $primary_name) | .value
+        '
+    fi
+}
+# Selectively extracts mode info from gdctl for use with SCB_AUTO_*.
+gnome_get_mode_info() {
+    local prefer="$1"
+    gnome_get_primary_display "$prefer" | jq -r '
+        .current_mode | {width: .resolution.width, height: .resolution.height, refresh: .refresh_rate}
     '
 }
 
@@ -216,24 +266,63 @@ if [ -f "$SCB_CONFIGFILE" ]; then
     # Attempt to extract a preferred display from gamescope_opts.
     # This sed command looks for either -O or --prefer-output followed by whitespace and a non‑space value.
     PREFER_OUTPUT=$(echo "$gamescope_opts" | sed -nE 's/.*(-O|--prefer-output)[[:space:]]+([^[:space:]]+).*/\2/p')
-    # kde_auto_args_preflight will fail fast if the user doesn't have deps installed.
-    if [ "$SCB_AUTO_RES" -eq 1 ] && kde_auto_args_preflight; then
-        # width/height are mode-specifc values
-        KDE_WIDTH=$(kde_get_mode_info "$PREFER_OUTPUT" | jq -r '.width')
-        KDE_HEIGHT=$(kde_get_mode_info "$PREFER_OUTPUT" | jq -r '.height')
-        gamescope_opts=$(replace_or_append_arg "$gamescope_opts" "-W[[:space:]]*[0-9]+" "-W $KDE_WIDTH")
-        gamescope_opts=$(replace_or_append_arg "$gamescope_opts" "-H[[:space:]]*[0-9]+" "-H $KDE_HEIGHT")
+
+    # Determine which desktop environment backend to use for auto-detection.
+    # Run KDE/GNOME preflight once and remember the result to avoid repeated messages.
+    SCB_DETECT="none"
+    if kde_auto_args_preflight >/dev/null 2>&1; then
+        SCB_DETECT="kde"
+    elif gnome_auto_args_preflight >/dev/null 2>&1; then
+        SCB_DETECT="gnome"
+    else
+        SCB_DETECT="none"
     fi
-    if [ "$SCB_AUTO_HDR" -eq 1 ] && kde_auto_args_preflight; then
-        KDE_HDR_STATE=$(kde_get_primary_display "$PREFER_OUTPUT" | jq -r '.hdr')
-        if [[ "$KDE_HDR_STATE" == "true" ]]; then
-            gamescope_opts=$(verify_or_append_arg "$gamescope_opts" "--hdr-enabled")
+
+    # Use the detected backend for SCB_AUTO_* checks
+    if [ "$SCB_AUTO_RES" -eq 1 ]; then
+        if [ "$SCB_DETECT" = "kde" ]; then
+            # width/height are mode-specific values from KDE
+            WIDTH=$(kde_get_mode_info "$PREFER_OUTPUT" | jq -r '.width')
+            HEIGHT=$(kde_get_mode_info "$PREFER_OUTPUT" | jq -r '.height')
+        elif [ "$SCB_DETECT" = "gnome" ]; then
+            # width/height are mode-specific values from GNOME
+            WIDTH=$(gnome_get_mode_info "$PREFER_OUTPUT" | jq -r '.width')
+            HEIGHT=$(gnome_get_mode_info "$PREFER_OUTPUT" | jq -r '.height')
+        else
+            WIDTH=""
+            HEIGHT=""
+        fi
+        if [ -n "$WIDTH" ] && [ -n "$HEIGHT" ]; then
+            gamescope_opts=$(replace_or_append_arg "$gamescope_opts" "-W[[:space:]]*[0-9]+" "-W $WIDTH")
+            gamescope_opts=$(replace_or_append_arg "$gamescope_opts" "-H[[:space:]]*[0-9]+" "-H $HEIGHT")
         fi
     fi
-    if [ "$SCB_AUTO_VRR" -eq 1 ] && kde_auto_args_preflight; then
-        KDE_VRR_STATE=$(kde_get_primary_display "$PREFER_OUTPUT" | jq -r '.vrrPolicy')
-        if [[ "$KDE_VRR_STATE" == 1 || "$KDE_VRR_STATE" == 2 ]]; then
-            gamescope_opts=$(verify_or_append_arg "$gamescope_opts" "--adaptive-sync")
+    if [ "$SCB_AUTO_HDR" -eq 1 ]; then
+        if [ "$SCB_DETECT" = "kde" ]; then
+            KDE_HDR_STATE=$(kde_get_primary_display "$PREFER_OUTPUT" | jq -r '.hdr')
+            if [[ "$KDE_HDR_STATE" == "true" ]]; then
+                gamescope_opts=$(verify_or_append_arg "$gamescope_opts" "--hdr-enabled")
+            fi
+        elif [ "$SCB_DETECT" = "gnome" ]; then
+            # Check if HDR is enabled on GNOME (bt2100 color mode indicates HDR)
+            GNOME_HDR_STATE=$(gnome_get_primary_display "$PREFER_OUTPUT" | jq -r '."color-mode"')
+            if [[ "$GNOME_HDR_STATE" == "bt2100" ]]; then
+                gamescope_opts=$(verify_or_append_arg "$gamescope_opts" "--hdr-enabled")
+            fi
+        fi
+    fi
+    if [ "$SCB_AUTO_VRR" -eq 1 ]; then
+        if [ "$SCB_DETECT" = "kde" ]; then
+            KDE_VRR_STATE=$(kde_get_primary_display "$PREFER_OUTPUT" | jq -r '.vrrPolicy')
+            if [[ "$KDE_VRR_STATE" == 1 || "$KDE_VRR_STATE" == 2 ]]; then
+                gamescope_opts=$(verify_or_append_arg "$gamescope_opts" "--adaptive-sync")
+            fi
+        elif [ "$SCB_DETECT" = "gnome" ]; then
+            # Check if VRR is enabled on GNOME (refresh-rate-mode == "variable")
+            GNOME_VRR_STATE=$(gnome_get_primary_display "$PREFER_OUTPUT" | jq -r '.current_mode.properties."refresh-rate-mode"')
+            if [[ "$GNOME_VRR_STATE" == "variable" ]]; then
+                gamescope_opts=$(verify_or_append_arg "$gamescope_opts" "--adaptive-sync")
+            fi
         fi
     fi
 
@@ -259,13 +348,15 @@ else
 # To not use this default set of arguments, just launch scb with SCB_NOSCOPE=1 or just add any gamescope argument before the '-- %command%' then this variable will be ignored
 #SCB_GAMESCOPE_ARGS="--mangoapp -f -w 2560 -h 1440 -W 2560 -H 1440 -r 180 --force-grab-cursor --hdr-enabled -e"
 #
-# To auto-detect KDE display width, height, refresh, VRR and HDR states, you can use SCB_AUTO_* {RES|HDR|VRR}
+# To auto-detect display width, height, refresh, VRR and HDR states, you can use SCB_AUTO_* {RES|HDR|VRR}
 # These vars will override any previously set values for -W and -H or append --hdr-enabled and --adaptive-sync
 # automatically depending on the current settings for your active display, or the display chosen with -O /
-# --prefer-output flags in gamescsope.
+# --prefer-output flags in gamescope. This works on both KDE (via kscreen-doctor) and GNOME (via gdctl).
 #SCB_AUTO_RES=1
 #SCB_AUTO_HDR=1
 #SCB_AUTO_VRR=1
+# For GNOME users testing a custom gdctl build, you can specify the path to gdctl:
+#export GDCTL_COMMAND="$HOME/.local/bin/gdctl-mr4708"
 # To debug scopebuddy output, uncomment the following line. After launching games, the executed cmd will be output to ~/.config/scopebuddy/scopebuddy.log
 #SCB_DEBUG=1
 ###

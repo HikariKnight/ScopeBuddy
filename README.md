@@ -19,10 +19,71 @@ Features:
 * Enables you to define per-game arguments for gamescope
 * Enables you to define global and per-game ENV variables
 * Optionally use scb just for ENV var management
-* Automatically infer display output args (output width, height, refresh rate, HDR, or VRR flags) from primary display (KDE only)
+* Automatically infer display output args (output width, height, refresh rate, HDR, or VRR flags) from primary display (KDE Plasma and GNOME)
 
-## Documentaion and usage
+## Documentation and usage
 Look at https://docs.bazzite.gg/Advanced/scopebuddy/
+
+## Auto-Detection Features (`SCB_AUTO_*`)
+
+ScopeBuddy can automatically detect your display settings and configure gamescope accordingly:
+
+- **SCB_AUTO_RES=1**: Automatically detect and set display resolution (-W and -H)
+- **SCB_AUTO_HDR=1**: Automatically enable HDR if your display has HDR enabled
+- **SCB_AUTO_VRR=1**: Automatically enable adaptive sync if VRR is active on your display
+
+### Desktop Environment Support
+
+- **KDE Plasma**: Uses `kscreen-doctor` (requires `jq`)
+- **GNOME**: Uses `gdctl` (requires `jq` and `gdctl` with JSON output support)
+
+### Usage Examples
+
+**In Steam launch options:**
+```bash
+SCB_AUTO_RES=1 SCB_AUTO_HDR=1 SCB_AUTO_VRR=1 scopebuddy -- %command%
+```
+
+**In config file (~/.config/scopebuddy/scb.conf):**
+```bash
+# Enable auto-detection for resolution, HDR, and VRR
+SCB_AUTO_RES=1
+SCB_AUTO_HDR=1
+SCB_AUTO_VRR=1
+```
+
+### GNOME Support
+
+For GNOME users, you need a version of `gdctl` with JSON output support. If your distribution's version doesn't support this yet, you can download the version from [this merge request](https://gitlab.gnome.org/GNOME/mutter/-/merge_requests/4708):
+
+> **Note:** The GNOME GitLab may require authentication to download files directly. If you encounter a permissions error, log in to your GitLab account in your browser, navigate to the merge request, and download the `gdctl` file manually. Save it as `~/.local/bin/gdctl-mr4708` and make it executable:
+
+```bash
+chmod +x ~/.local/bin/gdctl-mr4708
+```
+
+Then use it with the `GDCTL_COMMAND` variable:
+
+**In Steam launch options:**
+```bash
+GDCTL_COMMAND=$HOME/.local/bin/gdctl-mr4708 SCB_AUTO_RES=1 SCB_AUTO_HDR=1 SCB_AUTO_VRR=1 scopebuddy -- %command%
+```
+
+**In config file:**
+```bash
+export GDCTL_COMMAND="$HOME/.local/bin/gdctl-mr4708"
+SCB_AUTO_RES=1
+SCB_AUTO_HDR=1
+SCB_AUTO_VRR=1
+```
+
+### Multi-Monitor Support
+
+If you're using multiple monitors and want to target a specific display, use gamescope's `-O` or `--prefer-output` flag:
+
+```bash
+SCB_AUTO_RES=1 scopebuddy -O DP-3 -- %command%
+```
 
 ## Installation
 
@@ -31,9 +92,10 @@ Look at https://docs.bazzite.gg/Advanced/scopebuddy/
 * [gamescope](https://github.com/ValveSoftware/gamescope)
 * perl
 
-if using `$SCB_AUTO_RES`/`$SCB_AUTO_HDR`/`$SCB_AUTO_VRR`:
+Optional for `$SCB_AUTO_RES`/`$SCB_AUTO_HDR`/`$SCB_AUTO_VRR`:
 * `jq` (installed by default on Bazzite - other distros may need to install manually)
-* KDE Plasma desktop (Gnome support coming soon)
+* **KDE Plasma**: `kscreen-doctor` (usually pre-installed)
+* **GNOME**: `gdctl` with JSON output support (see GNOME Support section above)
 
 #### Using curl:
 ```bash
