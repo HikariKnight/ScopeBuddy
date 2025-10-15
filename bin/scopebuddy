@@ -174,6 +174,7 @@ gnome_get_primary_display() {
     # we want to respect user settings for -O or --prefer-output.
     # if so, just get that by connector name.
     local prefer="$1"
+    # shellcheck disable=SC2155
     local gdctl_output=$("$GDCTL_COMMAND" show --format json --current-mode --properties)
     if [ -n "$prefer" ]; then
         # Try to select the output by its connector name
