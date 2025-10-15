@@ -39,6 +39,9 @@ XDG_CONFIG_HOME=${XDG_CONFIG_HOME:-$HOME/.config}
 SCB_CONF=${SCB_CONF:-"scb.conf"}
 SCB_CONFIGDIR="$XDG_CONFIG_HOME/scopebuddy"
 
+# Set APPID used for current game config
+SCB_APPID=${SCB_APPID:-}
+
 # By default we will never be in gamemode
 SCB_GAMEMODE=0
 
@@ -243,8 +246,15 @@ while [[ $# -gt 0 ]]; do
     shift
 done
 
-# Get the STEAM_APPID from %command%
-STEAM_APPID=$(echo "$command" | perl -pe 's/.+"AppId=(\d+)"\s.+/\1/')
+# If $SCB_APPID is not set, attempt to auto detect APPID
+if [ -z "$SCB_APPID" ]; then
+    # Get the Steam APPID from %command%
+    AUTO_APPID=$(echo "$command" | perl -pe 's/.+"AppId=(\d+)"\s.+/\1/')
+    if ! [[ $AUTO_APPID =~ ^[0-9]+$ ]]; then
+        AUTO_APPID="null"
+    fi
+    SCB_APPID="$AUTO_APPID"
+fi
 
 # Load the SCB config file if it exists then apply the default args
 if [ -f "$SCB_CONFIGFILE" ]; then
@@ -252,11 +262,11 @@ if [ -f "$SCB_CONFIGFILE" ]; then
     # shellcheck disable=SC1090
     source "$SCB_CONFIGFILE"
 
-    # If a config exists for this games STEAM_APPID and SCB_CONF is set to scb.conf (default)
-    if [ -f "$SCB_CONFIGDIR/AppID/${STEAM_APPID}.conf" ]; then
-        # Source the STEAM_APPID specific config, overriding any similar values set by SCB_CONF
+    # If a config exists for this games APPID and SCB_CONF is set to scb.conf (default)
+    if [ -f "$SCB_CONFIGDIR/AppID/${SCB_APPID}.conf" ]; then
+        # Source the APPID specific config, overriding any similar values set by SCB_CONF
         # shellcheck disable=SC1090
-        source "$SCB_CONFIGDIR/AppID/${STEAM_APPID}.conf"
+        source "$SCB_CONFIGDIR/AppID/${SCB_APPID}.conf"
     fi
 
     # If the user has supplied ANY args to gamescope, do not load the SCB_GAMESCOPE_ARGS
