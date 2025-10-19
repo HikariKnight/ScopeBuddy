@@ -31,10 +31,10 @@ SCB_NOSCOPE=${SCB_NOSCOPE:-0}
 GAMESCOPE_BIN=${GAMESCOPE_BIN:-gamescope}
 
 # Set default gdctl command for GNOME
-GDCTL_COMMAND=${GDCTL_COMMAND:-gdctll}
+GDCTL_COMMAND=${GDCTL_COMMAND:-gdctl}
 
 # Set default gnome-randr command for GNOME (alternative to gdctl)
-GNOME_RANDR_COMMAND=${GNOME_RANDR_COMMAND:-gnome-randrr}
+GNOME_RANDR_COMMAND=${GNOME_RANDR_COMMAND:-gnome-randr}
 
 # Set default home config directory
 XDG_CONFIG_HOME=${XDG_CONFIG_HOME:-$HOME/.config}
@@ -445,7 +445,7 @@ Current desktop: ${XDG_CURRENT_DESKTOP:-not set}
 Session: ${DESKTOP_SESSION:-not set}
 
 For more information, see:
-https://github.com/HikariKnight/ScopeBuddy#auto-detection-features-scb_auto_
+https://github.com/HikariKnight/ScopeBuddy#auto-detection-features-scb_auto_"
 
         show_error_dialog "ScopeBuddy Auto-Detection Error" "$ERROR_MSG" 1
     fi
