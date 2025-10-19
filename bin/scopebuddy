@@ -88,7 +88,7 @@ show_error_dialog() {
         zenity --error --text="$message" --title="$title" --width=500 2>/dev/null &
     elif command -v xmessage >/dev/null 2>&1; then
         # Fallback for basic X11 systems
-        xmessage -center -buttons "OK:0" "$title
+        xmessage -center -buttons "OK:0" "$title"
 
 $message" 2>/dev/null &
     elif command -v notify-send >/dev/null 2>&1; then
