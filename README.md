@@ -35,7 +35,7 @@ ScopeBuddy can automatically detect your display settings and configure gamescop
 ### Desktop Environment Support
 
 - **KDE Plasma**: Uses `kscreen-doctor` (requires `jq`)
-- **GNOME**: Uses `gdctl` (requires `jq` and `gdctl` with JSON output support)
+- **GNOME**: Uses either `gdctl` (requires `jq` and upstream version with `--format=json` support) or `gnome-randr` as fallback
 
 ### Usage Examples
 
@@ -54,7 +54,23 @@ SCB_AUTO_VRR=1
 
 ### GNOME Support
 
-For GNOME users, you need a version of `gdctl` with JSON output support. If your distribution's version doesn't support this yet, you can download the version from [this merge request](https://gitlab.gnome.org/GNOME/mutter/-/merge_requests/4708):
+ScopeBuddy supports two methods for GNOME display detection:
+
+#### Option 1: gdctl (Preferred - may require manual steps)
+For GNOME users with an upstream version of `gdctl` that supports `--format=json`. ScopeBuddy will automatically test if your `gdctl` version supports this.
+
+You can check if you have a version that supports this by running
+
+`gdctl show --format=json` in your terminal. If you see output about your display, your version is supported.
+
+If you see
+
+```
+usage: gdctl [-h] COMMAND ...
+gdctl: error: unrecognized arguments: --format=json
+```
+
+Then your distribution's version doesn't support JSON output yet. You can either proceed to option 2 (gnome-randr) or download the upstream version of gdctl from [this merge request](https://gitlab.gnome.org/GNOME/mutter/-/merge_requests/4708):
 
 > **Note:** The GNOME GitLab may require authentication to download files directly. If you encounter a permissions error, log in to your GitLab account in your browser, navigate to the merge request, and download the `gdctl` file manually. Save it as `~/.local/bin/gdctl-mr4708` and make it executable:
 
@@ -77,6 +93,21 @@ SCB_AUTO_HDR=1
 SCB_AUTO_VRR=1
 ```
 
+#### Option 2: gnome-randr (Automatic Fallback)
+If `gdctl` is not available or doesn't support `--format=json`, ScopeBuddy will automatically fall back to using [`gnome-randr`](https://github.com/maxwellainatchi/gnome-randr-rust).
+
+gnome-randr is shipped by default with Bazzite's GNOME-based images, and should be available through package managers on most other distros.
+
+You can also specify a custom `gnome-randr` path:
+
+**In config file:**
+```bash
+export GNOME_RANDR_COMMAND="$HOME/.local/bin/gnome-randr"
+SCB_AUTO_RES=1
+SCB_AUTO_HDR=1
+SCB_AUTO_VRR=1
+```
+
 ### Multi-Monitor Support
 
 If you're using multiple monitors and want to target a specific display, use gamescope's `-O` or `--prefer-output` flag:
@@ -93,9 +124,8 @@ SCB_AUTO_RES=1 scopebuddy -O DP-3 -- %command%
 * perl
 
 Optional for `$SCB_AUTO_RES`/`$SCB_AUTO_HDR`/`$SCB_AUTO_VRR`:
-* `jq` (installed by default on Bazzite - other distros may need to install manually)
-* **KDE Plasma**: `kscreen-doctor` (usually pre-installed)
-* **GNOME**: `gdctl` with JSON output support (see GNOME Support section above)
+* **KDE Plasma**: `kscreen-doctor` (usually pre-installed) and `jq` (installed by default on Bazzite)
+* **GNOME**: Either `gdctl` with `--format=json` support (requires `jq`) OR `gnome-randr` (see GNOME Support section above)
 
 #### Using curl:
 ```bash
