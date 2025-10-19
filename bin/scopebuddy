@@ -19,7 +19,7 @@ set -eo pipefail
 ##########
 # Globals
 ##########
-SCB_VER="1.2.0"
+SCB_VER="1.2.1"
 
 gamescope_opts=""
 command=""
@@ -32,6 +32,9 @@ GAMESCOPE_BIN=${GAMESCOPE_BIN:-gamescope}
 
 # Set default gdctl command for GNOME
 GDCTL_COMMAND=${GDCTL_COMMAND:-gdctl}
+
+# Set default gnome-randr command for GNOME (alternative to gdctl)
+GNOME_RANDR_COMMAND=${GNOME_RANDR_COMMAND:-gnome-randr}
 
 # Set default home config directory
 XDG_CONFIG_HOME=${XDG_CONFIG_HOME:-$HOME/.config}
@@ -56,6 +59,46 @@ SCB_AUTO_VRR=${SCB_AUTO_VRR:-0}
 ###################
 # Helper functions
 ###################
+
+# Shows an error dialog/notification to the user and optionally exits
+# Usage:
+#    show_error_dialog "Title" "Message" [exit_code]
+# Params:
+#    $1: (Required) Error title
+#    $2: (Required) Error message (can include newlines)
+#    $3: (Optional) Exit code (if provided, script will exit with this code)
+show_error_dialog() {
+    local title="$1"
+    local message="$2"
+    local exit_code="${3:-}"
+
+    # Always print to console
+    echo "================================================================================"
+    echo "ERROR: $title"
+    echo "================================================================================"
+    echo "$message"
+    echo "================================================================================"
+
+    # Try to show a GUI error dialog using various methods (in order of preference)
+    if command -v kdialog >/dev/null 2>&1; then
+        # KDE Plasma - native dialog
+        kdialog --error "$message" --title "$title" 2>/dev/null &
+    elif command -v zenity >/dev/null 2>&1; then
+        # GTK-based systems (GNOME, XFCE, etc.)
+        zenity --error --text="$message" --title="$title" --width=500 2>/dev/null &
+    elif command -v xmessage >/dev/null 2>&1; then
+        # Fallback for basic X11 systems
+        xmessage -center -buttons "OK:0" "$title: $message" 2>/dev/null &
+    elif command -v notify-send >/dev/null 2>&1; then
+        # Last resort - notification (less visible but better than nothing)
+        notify-send -u critical "$title" "$message" -t 30000 2>/dev/null &
+    fi
+
+    # Exit if exit code was provided
+    if [ -n "$exit_code" ]; then
+        exit "$exit_code"
+    fi
+}
 
 # Appends a substring to $gamescope_apts if it doesn't already exist
 # Usage:
@@ -93,45 +136,50 @@ replace_or_append_arg() {
     echo "$argstring"
 }
 # Validates capability to run $SCB_AUTO_*
-# Returns 0 and logs if any dependency is missing.
+# Returns 0 if dependencies are met, 1 otherwise (silent check).
 kde_auto_args_preflight() {
-    local missing=""
     # Check for KDE session
     if [ -z "$KDE_FULL_SESSION" ]; then
-        missing+="KDE_FULL_SESSION not set; "
+        return 1
     fi
     # Check that jq is available
     if ! command -v jq >/dev/null 2>&1; then
-        missing+="jq not available; "
+        return 1
     fi
     # Check that kscreen-doctor is available
     if ! command -v kscreen-doctor >/dev/null 2>&1; then
-        missing+="kscreen-doctor not available; "
-    fi
-    if [ -n "$missing" ]; then
-        echo "An SCB_AUTO_* argument was passed (auto res, auto hdr, auto vrr) but the following dependencies failed: $missing"
         return 1
     fi
     return 0
 }
-# Validates capability to run $SCB_AUTO_* on GNOME
-# Returns 0 and logs if any dependency is missing.
-gnome_auto_args_preflight() {
-    local missing=""
+# Validates capability to run $SCB_AUTO_* on GNOME with gdctl
+# Returns 0 if dependencies are met, 1 otherwise (silent check).
+gnome_gdctl_auto_args_preflight() {
     # Check for GNOME session
     if [ "$XDG_CURRENT_DESKTOP" != "GNOME" ] && [ "$DESKTOP_SESSION" != "gnome" ]; then
-        missing+="Not running GNOME desktop session; "
+        return 1
     fi
     # Check that jq is available
     if ! command -v jq >/dev/null 2>&1; then
-        missing+="jq not available; "
+        return 1
     fi
-    # Check that gdctl is available (using GDCTL_COMMAND which can be customized)
+    # Check that gdctl is available and supports --format=json (upstream version check)
     if ! command -v "$GDCTL_COMMAND" >/dev/null 2>&1; then
-        missing+="$GDCTL_COMMAND not available; "
+        return 1
+    elif ! "$GDCTL_COMMAND" show --format=json >/dev/null 2>&1; then
+        return 1
     fi
-    if [ -n "$missing" ]; then
-        echo "An SCB_AUTO_* argument was passed (auto res, auto hdr, auto vrr) but the following dependencies failed: $missing"
+    return 0
+}
+# Validates capability to run $SCB_AUTO_* on GNOME with gnome-randr
+# Returns 0 if dependencies are met, 1 otherwise (silent check).
+gnome_randr_auto_args_preflight() {
+    # Check for GNOME session
+    if [ "$XDG_CURRENT_DESKTOP" != "GNOME" ] && [ "$DESKTOP_SESSION" != "gnome" ]; then
+        return 1
+    fi
+    # Check that gnome-randr is available (using GNOME_RANDR_COMMAND which can be customized)
+    if ! command -v "$GNOME_RANDR_COMMAND" >/dev/null 2>&1; then
         return 1
     fi
     return 0
@@ -173,7 +221,7 @@ kde_get_mode_info() {
 }
 # Gets the user's primary display via gdctl for GNOME.
 # Returns a single JSON object for the display.
-gnome_get_primary_display() {
+gnome_gdctl_get_primary_display() {
     # we want to respect user settings for -O or --prefer-output.
     # if so, just get that by connector name.
     local prefer="$1"
@@ -193,11 +241,92 @@ gnome_get_primary_display() {
     fi
 }
 # Selectively extracts mode info from gdctl for use with SCB_AUTO_*.
-gnome_get_mode_info() {
+gnome_gdctl_get_mode_info() {
     local prefer="$1"
-    gnome_get_primary_display "$prefer" | jq -r '
+    gnome_gdctl_get_primary_display "$prefer" | jq -r '
         .current_mode | {width: .resolution.width, height: .resolution.height, refresh: .refresh_rate}
     '
+}
+# Gets the user's primary display connector via gnome-randr for GNOME.
+# Returns the connector name (e.g., "DP-3").
+gnome_randr_get_primary_display() {
+    # we want to respect user settings for -O or --prefer-output.
+    local prefer="$1"
+    if [ -n "$prefer" ]; then
+        # Return the preferred output if specified
+        echo "$prefer"
+    else
+        # Get the primary display connector from gnome-randr query -s
+        "$GNOME_RANDR_COMMAND" query -s | awk '
+            /^logical monitor [0-9]+:/ { in_monitor=1; primary=0; next }
+            in_monitor && /primary: yes/ { primary=1; next }
+            in_monitor && /associated physical monitors:/ { in_physical=1; next }
+            in_physical && primary && /^\t[A-Z]/ {
+                # Extract the connector name (first field after tab)
+                match($0, /^\t([A-Z0-9-]+)/, arr)
+                print arr[1]
+                exit
+            }
+            /^logical monitor [0-9]+:/ { in_monitor=1; in_physical=0; primary=0 }
+        '
+    fi
+}
+# Selectively extracts mode info from gnome-randr for use with SCB_AUTO_*.
+# Returns JSON with width, height, and refresh rate of the active mode.
+gnome_randr_get_mode_info() {
+    local prefer="$1"
+    local connector
+    connector=$(gnome_randr_get_primary_display "$prefer" 2>/dev/null)
+
+    if [ -z "$connector" ]; then
+        echo "{}"
+        return
+    fi
+
+    # Query the specific connector and extract the active mode (marked with *)
+    "$GNOME_RANDR_COMMAND" query "$connector" | awk -v connector="$connector" '
+        # Look for lines with the active mode marked with *
+        /[0-9]+x[0-9]+@[0-9.]+/ {
+            # Check if this line contains the refresh rate with *
+            if (match($0, /([0-9]+)x([0-9]+)@[0-9.]+(\+vrr)?[[:space:]]+[0-9]+x[0-9]+[[:space:]]+([0-9.]+)\*/, arr)) {
+                width = arr[1]
+                height = arr[2]
+                refresh = arr[4]
+                printf "{\"width\": %s, \"height\": %s, \"refresh\": %s}\n", width, height, refresh
+                exit
+            }
+        }
+    '
+}
+# Check if VRR is active on the primary display via gnome-randr.
+# Returns "true" if VRR is active, "false" otherwise.
+gnome_randr_check_vrr() {
+    local prefer="$1"
+    local connector
+    connector=$(gnome_randr_get_primary_display "$prefer" 2>/dev/null)
+
+    if [ -z "$connector" ]; then
+        echo "false"
+        return
+    fi
+
+    # Query the specific connector and check if the active mode has +vrr
+    local vrr_result
+    vrr_result=$("$GNOME_RANDR_COMMAND" query "$connector" | awk '
+        # Look for the active mode line (contains *)
+        /[0-9]+x[0-9]+@[0-9.]+/ {
+            # Check if this line has * and +vrr
+            if ($0 ~ /\*/ && $0 ~ /\+vrr/) {
+                print "true"
+                found=1
+                exit
+            }
+        }
+        END {
+            if (!found) print "false"
+        }
+    ')
+    echo "$vrr_result"
 }
 
 
@@ -281,12 +410,42 @@ if [ -f "$SCB_CONFIGFILE" ]; then
     # Determine which desktop environment backend to use for auto-detection.
     # Run KDE/GNOME preflight once and remember the result to avoid repeated messages.
     SCB_DETECT="none"
-    if kde_auto_args_preflight >/dev/null 2>&1; then
+    if kde_auto_args_preflight; then
         SCB_DETECT="kde"
-    elif gnome_auto_args_preflight >/dev/null 2>&1; then
-        SCB_DETECT="gnome"
+    elif gnome_gdctl_auto_args_preflight; then
+        SCB_DETECT="gnome_gdctl"
+    elif gnome_randr_auto_args_preflight; then
+        SCB_DETECT="gnome_randr"
     else
         SCB_DETECT="none"
+    fi
+
+    # Warn if auto-detection is requested but no backend was detected
+    if [ "$SCB_DETECT" = "none" ] && { [ "$SCB_AUTO_RES" -eq 1 ] || [ "$SCB_AUTO_HDR" -eq 1 ] || [ "$SCB_AUTO_VRR" -eq 1 ]; }; then
+        # Build list of enabled AUTO flags
+        ENABLED_FLAGS=""
+        [ "$SCB_AUTO_RES" -eq 1 ] && ENABLED_FLAGS="${ENABLED_FLAGS}SCB_AUTO_RES, "
+        [ "$SCB_AUTO_HDR" -eq 1 ] && ENABLED_FLAGS="${ENABLED_FLAGS}SCB_AUTO_HDR, "
+        [ "$SCB_AUTO_VRR" -eq 1 ] && ENABLED_FLAGS="${ENABLED_FLAGS}SCB_AUTO_VRR, "
+        ENABLED_FLAGS="${ENABLED_FLAGS%, }"  # Remove trailing comma and space
+
+        ERROR_MSG="You have the following auto-detection flags enabled: ${ENABLED_FLAGS}
+
+However, your desktop environment doesn't support auto-detection.
+
+Please disable these flags in your ScopeBuddy configuration.
+
+Required dependencies:
+  • KDE Plasma: kscreen-doctor and jq
+  • GNOME: gdctl (with --format=json) or gnome-randr
+
+Current desktop: ${XDG_CURRENT_DESKTOP:-not set}
+Session: ${DESKTOP_SESSION:-not set}
+
+For more information, see:
+https://github.com/HikariKnight/ScopeBuddy#auto-detection-features-scb_auto_"
+
+        show_error_dialog "ScopeBuddy Auto-Detection Error" "$ERROR_MSG" 1
     fi
 
     # Use the detected backend for SCB_AUTO_* checks
@@ -295,10 +454,16 @@ if [ -f "$SCB_CONFIGFILE" ]; then
             # width/height are mode-specific values from KDE
             WIDTH=$(kde_get_mode_info "$PREFER_OUTPUT" | jq -r '.width')
             HEIGHT=$(kde_get_mode_info "$PREFER_OUTPUT" | jq -r '.height')
-        elif [ "$SCB_DETECT" = "gnome" ]; then
-            # width/height are mode-specific values from GNOME
-            WIDTH=$(gnome_get_mode_info "$PREFER_OUTPUT" | jq -r '.width')
-            HEIGHT=$(gnome_get_mode_info "$PREFER_OUTPUT" | jq -r '.height')
+        elif [ "$SCB_DETECT" = "gnome_gdctl" ]; then
+            # width/height are mode-specific values from GNOME via gdctl
+            WIDTH=$(gnome_gdctl_get_mode_info "$PREFER_OUTPUT" | jq -r '.width')
+            HEIGHT=$(gnome_gdctl_get_mode_info "$PREFER_OUTPUT" | jq -r '.height')
+        elif [ "$SCB_DETECT" = "gnome_randr" ]; then
+            # width/height are mode-specific values from GNOME via gnome-randr
+            MODE_INFO=$(gnome_randr_get_mode_info "$PREFER_OUTPUT")
+            # Extract width and height from JSON: {"width": 3440, "height": 1440, "refresh": 143.97}
+            WIDTH=$(echo "$MODE_INFO" | grep -oP '"width":\s*\K[0-9]+')
+            HEIGHT=$(echo "$MODE_INFO" | grep -oP '"height":\s*\K[0-9]+')
         else
             WIDTH=""
             HEIGHT=""
@@ -314,10 +479,17 @@ if [ -f "$SCB_CONFIGFILE" ]; then
             if [[ "$KDE_HDR_STATE" == "true" ]]; then
                 gamescope_opts=$(verify_or_append_arg "$gamescope_opts" "--hdr-enabled")
             fi
-        elif [ "$SCB_DETECT" = "gnome" ]; then
-            # Check if HDR is enabled on GNOME (bt2100 color mode indicates HDR)
-            GNOME_HDR_STATE=$(gnome_get_primary_display "$PREFER_OUTPUT" | jq -r '."color-mode"')
-            if [[ "$GNOME_HDR_STATE" == "bt2100" ]]; then
+        elif [ "$SCB_DETECT" = "gnome_gdctl" ]; then
+            # Check if HDR is enabled on GNOME via gdctl (bt2100 color mode indicates HDR)
+            GNOME_GDCTL_HDR_STATE=$(gnome_gdctl_get_primary_display "$PREFER_OUTPUT" | jq -r '."color-mode"')
+            if [[ "$GNOME_GDCTL_HDR_STATE" == "bt2100" ]]; then
+                gamescope_opts=$(verify_or_append_arg "$gamescope_opts" "--hdr-enabled")
+            fi
+        elif [ "$SCB_DETECT" = "gnome_randr" ]; then
+            # Check if HDR is enabled on GNOME via gnome-randr (color-mode: 1 indicates HDR/bt2100)
+            CONNECTOR=$(gnome_randr_get_primary_display "$PREFER_OUTPUT" 2>/dev/null)
+            GNOME_RANDR_HDR_STATE=$("$GNOME_RANDR_COMMAND" query "$CONNECTOR" | awk '/^color-mode:/ {print $2}')
+            if [[ "$GNOME_RANDR_HDR_STATE" == "1" ]]; then
                 gamescope_opts=$(verify_or_append_arg "$gamescope_opts" "--hdr-enabled")
             fi
         fi
@@ -328,10 +500,16 @@ if [ -f "$SCB_CONFIGFILE" ]; then
             if [[ "$KDE_VRR_STATE" == 1 || "$KDE_VRR_STATE" == 2 ]]; then
                 gamescope_opts=$(verify_or_append_arg "$gamescope_opts" "--adaptive-sync")
             fi
-        elif [ "$SCB_DETECT" = "gnome" ]; then
-            # Check if VRR is enabled on GNOME (refresh-rate-mode == "variable")
-            GNOME_VRR_STATE=$(gnome_get_primary_display "$PREFER_OUTPUT" | jq -r '.current_mode.properties."refresh-rate-mode"')
-            if [[ "$GNOME_VRR_STATE" == "variable" ]]; then
+        elif [ "$SCB_DETECT" = "gnome_gdctl" ]; then
+            # Check if VRR is enabled on GNOME via gdctl (refresh-rate-mode == "variable")
+            GNOME_GDCTL_VRR_STATE=$(gnome_gdctl_get_primary_display "$PREFER_OUTPUT" | jq -r '.current_mode.properties."refresh-rate-mode"')
+            if [[ "$GNOME_GDCTL_VRR_STATE" == "variable" ]]; then
+                gamescope_opts=$(verify_or_append_arg "$gamescope_opts" "--adaptive-sync")
+            fi
+        elif [ "$SCB_DETECT" = "gnome_randr" ]; then
+            # Check if VRR is enabled on GNOME via gnome-randr (active mode has +vrr)
+            GNOME_RANDR_VRR_STATE=$(gnome_randr_check_vrr "$PREFER_OUTPUT")
+            if [[ "$GNOME_RANDR_VRR_STATE" == "true" ]]; then
                 gamescope_opts=$(verify_or_append_arg "$gamescope_opts" "--adaptive-sync")
             fi
         fi
@@ -366,7 +544,10 @@ else
 #SCB_AUTO_RES=1
 #SCB_AUTO_HDR=1
 #SCB_AUTO_VRR=1
-# For GNOME users testing a custom gdctl build, you can specify the path to gdctl:
+# For GNOME users: you can use either gdctl or gnome-randr for auto-detection
+# gdctl requires upstream version with --format=json support (will be tested automatically)
+# gnome-randr will be used as fallback if gdctl test fails
+# To specify a custom gdctl build (must support 'gdctl show --format=json'):
 #export GDCTL_COMMAND="$HOME/.local/bin/gdctl-mr4708"
 # To debug scopebuddy output, uncomment the following line. After launching games, the executed cmd will be output to ~/.config/scopebuddy/scopebuddy.log
 #SCB_DEBUG=1
