@@ -333,14 +333,30 @@ gnome_randr_check_vrr() {
 # Check for non-steam appid patterns and return an standardized auto value for SCB_APPID
 nonsteam_appid_detect() {
     local command="$1"
+    local SCB_CONFIGDIR="$2"
     local AUTO_APPID="null"
+    local APPID_FOLDER="null"
+
     # Detect Ubisoft Connect (uplay) games
     if echo "$command" | grep "uplay://" > /dev/null; then
-        AUTO_APPID="ubisoft/"$(echo "$command" | perl -pe 's/.+"uplay:\/\/launch\/(\d+)"\s+/\1/')
+        # Set APPID_FOLDER
+        APPID_FOLDER="ubisoft"
+        # Set auto appid
+        AUTO_APPID="$APPID_FOLDER/"$(echo "$command" | perl -pe 's/.+"uplay:\/\/launch\/(\d+)"\s+/\1/')
     # Detect games launched by Heroic Games Launcher
     elif echo "$command" | grep "heroic://" > /dev/null; then
-        AUTO_APPID="heroic/"$(echo "$command" | perl -pe 's/.+"heroic:\/\/launch\?appName=(.+)&.+\s+/\1/')
+        # Set APPID_FOLDER
+        APPID_FOLDER="heroic"
+        # Set auto appid
+        AUTO_APPID="$APPID_FOLDER/"$(echo "$command" | perl -pe 's/.+"heroic:\/\/launch\?appName=(.+)&.+\s+/\1/')
     fi
+
+    # Make config folder
+    if [ ! -d "$SCB_CONFIGDIR/AppID/$APPID_FOLDER" ] && [ "$APPID_FOLDER" != "null" ]; then
+        mkdir -p "$SCB_CONFIGDIR/AppID/$APPID_FOLDER"
+    fi
+
+    # Return the detected APPID
     echo "$AUTO_APPID"
 }
 
@@ -394,7 +410,7 @@ if [ -z "$SCB_APPID" ]; then
     # Get the Steam APPID from %command%
     AUTO_APPID=$(echo "$command" | perl -pe 's/.+"AppId=(\d+)"\s.+/\1/')
     if ! [[ $AUTO_APPID =~ ^[0-9]+$ ]]; then
-        AUTO_APPID=$(nonsteam_appid_detect "$command")
+        AUTO_APPID=$(nonsteam_appid_detect "$command" "$SCB_CONFIGDIR")
     fi
     SCB_APPID="$AUTO_APPID"
 fi
