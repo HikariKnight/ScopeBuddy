@@ -19,7 +19,7 @@ set -eo pipefail
 ##########
 # Globals
 ##########
-SCB_VER="1.2.1"
+SCB_VER="1.2.2"
 
 gamescope_opts=""
 command=""
