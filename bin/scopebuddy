@@ -330,7 +330,19 @@ gnome_randr_check_vrr() {
     ')
     echo "$vrr_result"
 }
-
+# Check for non-steam appid patterns and return an standardized auto value for SCB_APPID
+nonsteam_appid_detect() {
+    local command="$1"
+    local AUTO_APPID="null"
+    # Detect Ubisoft Connect (uplay) games
+    if echo "$command" | grep "uplay://" > /dev/null; then
+        AUTO_APPID="ubisoft/"$(echo "$command" | perl -pe 's/.+"uplay:\/\/launch\/(\d+)"\s+/\1/')
+    # Detect games launched by Heroic Games Launcher
+    elif echo "$command" | grep "heroic://" > /dev/null; then
+        AUTO_APPID="heroic/"$(echo "$command" | perl -pe 's/.+"heroic:\/\/launch\?appName=(.+)&.+\s+/\1/')
+    fi
+    echo "$AUTO_APPID"
+}
 
 #######
 # Main
@@ -377,12 +389,12 @@ while [[ $# -gt 0 ]]; do
     shift
 done
 
-# If $SCB_APPID is not set, attempt to auto detect APPID
+# If $SCB_APPID is not set, attempt to auto detect APPID for Steam
 if [ -z "$SCB_APPID" ]; then
     # Get the Steam APPID from %command%
     AUTO_APPID=$(echo "$command" | perl -pe 's/.+"AppId=(\d+)"\s.+/\1/')
     if ! [[ $AUTO_APPID =~ ^[0-9]+$ ]]; then
-        AUTO_APPID="null"
+        AUTO_APPID=$(nonsteam_appid_detect "$command")
     fi
     SCB_APPID="$AUTO_APPID"
 fi
