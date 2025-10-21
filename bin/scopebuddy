@@ -30,6 +30,8 @@ SCB_NOSCOPE=${SCB_NOSCOPE:-0}
 # Set default gamescope binary
 GAMESCOPE_BIN=${GAMESCOPE_BIN:-gamescope}
 
+KSCREEN_COMMAND=${KSCREEN_COMMAND:-kscreen-doctor}
+
 # Set default gdctl command for GNOME
 GDCTL_COMMAND=${GDCTL_COMMAND:-gdctl}
 
@@ -147,7 +149,7 @@ kde_auto_args_preflight() {
         return 1
     fi
     # Check that kscreen-doctor is available
-    if ! command -v kscreen-doctor >/dev/null 2>&1; then
+    if ! command -v "$KSCREEN_COMMAND" >/dev/null 2>&1; then
         return 1
     fi
     return 0
@@ -192,14 +194,14 @@ kde_get_primary_display() {
     local prefer="$1"
     if [ -n "$prefer" ]; then
         # Try to select the output by its exact name
-        kscreen-doctor -j | jq -c --arg prefer "$prefer" '
+        "$KSCREEN_COMMAND" -j | jq -c --arg prefer "$prefer" '
             .outputs | map(select(.name == $prefer)) | if length > 0 then .[0] else empty end
         '
     else
         # if multidisplay, sort to get the "primary". KDE's settings panel
         # has boolean style "primary" toggle, but kscreen uses a "priority" int value.
         # If there's only one, we just get the first one.
-        kscreen-doctor -j | jq -c '
+        "$KSCREEN_COMMAND" -j | jq -c '
             if (.outputs | length) == 1 then
                 .outputs[0]
             else
