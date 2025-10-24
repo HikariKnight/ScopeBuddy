@@ -44,6 +44,10 @@ XDG_CONFIG_HOME=${XDG_CONFIG_HOME:-$HOME/.config}
 SCB_CONF=${SCB_CONF:-"scb.conf"}
 SCB_CONFIGDIR="$XDG_CONFIG_HOME/scopebuddy"
 
+# Default off for SCB_APPENDMODE (this is better for testing, but is not 1:1 behavior with gamescope)
+# With APPENDMODE enabled, scopebuddy will pass all args and $SCB_GAMESCOPE_ARGS to gamescope with the args to scopebuddy added last.
+SCB_APPENDMODE=${SCB_APPENDMODE:-0}
+
 # Set APPID used for current game config
 SCB_APPID=${SCB_APPID:-}
 
@@ -102,7 +106,7 @@ show_error_dialog() {
     fi
 }
 
-# Appends a substring to $gamescope_apts if it doesn't already exist
+# Appends a substring to $gamescope_opts if it doesn't already exist
 # Usage:
 #    gamescope_opts=$(verify_or_append_arg "$gamescope_opts" "<TARGET>")
 # Params:
@@ -429,8 +433,10 @@ if [ -f "$SCB_CONFIGFILE" ]; then
     fi
 
     # If the user has supplied ANY args to gamescope, do not load the SCB_GAMESCOPE_ARGS
-    if [ -z "$gamescope_opts" ]; then
+    if [ -z "$gamescope_opts" ] && [ "$SCB_APPENDMODE" == 0 ]; then
         gamescope_opts=$SCB_GAMESCOPE_ARGS
+    elif [ "$SCB_APPENDMODE" == 1 ]; then
+        gamescope_opts="$SCB_GAMESCOPE_ARGS $gamescope_opts"
     fi
 
     # Attempt to extract a preferred display from gamescope_opts.
