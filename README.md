@@ -28,9 +28,12 @@ Look at https://docs.bazzite.gg/Advanced/scopebuddy/
 
 ScopeBuddy can automatically detect your display settings and configure gamescope accordingly:
 
-- **SCB_AUTO_RES=1**: Automatically detect and set display resolution (-W and -H)
+- **SCB_AUTO_RES=1**: Automatically detect and set display resolution (`-W` and `-H`)
 - **SCB_AUTO_HDR=1**: Automatically enable HDR if your display has HDR enabled
 - **SCB_AUTO_VRR=1**: Automatically enable adaptive sync if VRR is active on your display
+- **SCB_AUTO_REFRESH=1**: Automatically set an explicit refresh rate (`-r`) to your current monitor refresh rate. **NOTE: this has known limitations, and often doesn't work if `--adaptive-sync` or `SCB_AUTO_VRR` is set.**
+- **SCB_AUTO_FRAME_LIMIT=1**: Automatically set a gamescope's framerate limiter (`--framerate-limit`) to your current monitor refresh rate. **NOTE: this has known limitations, and often doesn't work if `--adaptive-sync` or `SCB_AUTO_VRR` is set.**
+
 
 ### Desktop Environment Support
 
@@ -50,6 +53,8 @@ SCB_AUTO_RES=1 SCB_AUTO_HDR=1 SCB_AUTO_VRR=1 scopebuddy -- %command%
 SCB_AUTO_RES=1
 SCB_AUTO_HDR=1
 SCB_AUTO_VRR=1
+SCB_AUTO_REFRESH=1
+SCB_AUTO_FRAME_LIMIT=1
 ```
 
 ### GNOME Support

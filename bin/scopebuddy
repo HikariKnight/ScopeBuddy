@@ -57,7 +57,12 @@ SCB_DEBUG=${SCB_DEBUG:-0}
 SCB_AUTO_RES=${SCB_AUTO_RES:-0}
 SCB_AUTO_HDR=${SCB_AUTO_HDR:-0}
 SCB_AUTO_VRR=${SCB_AUTO_VRR:-0}
+SCB_AUTO_REFRESH=${SCB_AUTO_REFRESH:-0}
+SCB_AUTO_FRAME_LIMIT=${SCB_AUTO_FRAME_LIMIT:-0}
 
+# Helper to determine get if any of the SCB_AUTO_* features are enabled
+# 0 = none enabled, >0 means at least one is enabled
+SCB_ANY_AUTO_FEAT_ENABLED=$(( SCB_AUTO_RES + SCB_AUTO_HDR + SCB_AUTO_VRR + SCB_AUTO_REFRESH + SCB_AUTO_FRAME_LIMIT ))
 ###################
 # Helper functions
 ###################
@@ -451,12 +456,14 @@ if [ -f "$SCB_CONFIGFILE" ]; then
     fi
 
     # Warn if auto-detection is requested but no backend was detected
-    if [ "$SCB_DETECT" = "none" ] && { [ "$SCB_AUTO_RES" -eq 1 ] || [ "$SCB_AUTO_HDR" -eq 1 ] || [ "$SCB_AUTO_VRR" -eq 1 ]; }; then
+    if [ "$SCB_DETECT" = "none" ] && [ "$SCB_ANY_AUTO_FEAT_ENABLED" -gt 0 ]; then
         # Build list of enabled AUTO flags
         ENABLED_FLAGS=""
         [ "$SCB_AUTO_RES" -eq 1 ] && ENABLED_FLAGS="${ENABLED_FLAGS}SCB_AUTO_RES, "
         [ "$SCB_AUTO_HDR" -eq 1 ] && ENABLED_FLAGS="${ENABLED_FLAGS}SCB_AUTO_HDR, "
         [ "$SCB_AUTO_VRR" -eq 1 ] && ENABLED_FLAGS="${ENABLED_FLAGS}SCB_AUTO_VRR, "
+        [ "$SCB_AUTO_REFRESH" -eq 1 ] && ENABLED_FLAGS="${ENABLED_FLAGS}SCB_AUTO_REFRESH, "
+        [ "$SCB_AUTO_FRAME_LIMIT" -eq 1 ] && ENABLED_FLAGS="${ENABLED_FLAGS}SCB_AUTO_FRAME_LIMIT, "
         ENABLED_FLAGS="${ENABLED_FLAGS%, }"  # Remove trailing comma and space
 
         ERROR_MSG="You have the following auto-detection flags enabled: ${ENABLED_FLAGS}
@@ -491,9 +498,8 @@ https://github.com/HikariKnight/ScopeBuddy#auto-detection-features-scb_auto_"
         elif [ "$SCB_DETECT" = "gnome_randr" ]; then
             # width/height are mode-specific values from GNOME via gnome-randr
             MODE_INFO=$(gnome_randr_get_mode_info "$PREFER_OUTPUT")
-            # Extract width and height from JSON: {"width": 3440, "height": 1440, "refresh": 143.97}
-            WIDTH=$(echo "$MODE_INFO" | grep -oP '"width":\s*\K[0-9]+')
-            HEIGHT=$(echo "$MODE_INFO" | grep -oP '"height":\s*\K[0-9]+')
+            WIDTH=$(echo "$MODE_INFO" | jq -r '.width')
+            HEIGHT=$(echo "$MODE_INFO" | jq -r '.height')
         else
             WIDTH=""
             HEIGHT=""
@@ -544,7 +550,36 @@ https://github.com/HikariKnight/ScopeBuddy#auto-detection-features-scb_auto_"
             fi
         fi
     fi
-
+    if [ "$SCB_AUTO_REFRESH" -eq 1 ]; then
+        if [ "$SCB_DETECT" = "kde" ]; then
+            REFRESH_RATE=$(kde_get_mode_info "$PREFER_OUTPUT" | jq -r '.refresh')
+        elif [ "$SCB_DETECT" = "gnome_gdctl" ]; then
+            REFRESH_RATE=$(gnome_gdctl_get_mode_info "$PREFER_OUTPUT" | jq -r '.refresh')
+        elif [ "$SCB_DETECT" = "gnome_randr" ]; then
+            MODE_INFO=$(gnome_randr_get_mode_info "$PREFER_OUTPUT")
+            REFRESH_RATE=$(echo "$MODE_INFO" | jq -r '.refresh')
+        else
+            REFRESH_RATE=""
+        fi
+        if [ -n "$REFRESH_RATE" ]; then
+            gamescope_opts=$(replace_or_append_arg "$gamescope_opts" "-r[[:space:]]*[0-9.]+" "-r $REFRESH_RATE")
+        fi
+    fi
+    if [ "$SCB_AUTO_FRAME_LIMIT" -eq 1 ]; then
+        if [ "$SCB_DETECT" = "kde" ]; then
+            REFRESH_RATE=$(kde_get_mode_info "$PREFER_OUTPUT" | jq -r '.refresh')
+        elif [ "$SCB_DETECT" = "gnome_gdctl" ]; then
+            REFRESH_RATE=$(gnome_gdctl_get_mode_info "$PREFER_OUTPUT" | jq -r '.refresh')
+        elif [ "$SCB_DETECT" = "gnome_randr" ]; then
+            MODE_INFO=$(gnome_randr_get_mode_info "$PREFER_OUTPUT")
+            REFRESH_RATE=$(echo "$MODE_INFO" | jq -r '.refresh')
+        else
+            REFRESH_RATE=""
+        fi
+        if [ -n "$REFRESH_RATE" ]; then
+                gamescope_opts=$(replace_or_append_arg "$gamescope_opts" "--framerate-limit[[:space:]]*[0-9.]+" "--framerate-limit $REFRESH_RATE")
+        fi
+    fi
 else
     # Make the default config file
     if [ ! -d "$SCB_CONFIGDIR/AppID" ]; then
