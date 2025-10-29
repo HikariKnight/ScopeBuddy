@@ -19,7 +19,7 @@ set -eo pipefail
 ##########
 # Globals
 ##########
-SCB_VER="1.2.2"
+SCB_VER="1.2.3"
 
 gamescope_opts=""
 command=""
@@ -51,9 +51,6 @@ SCB_APPENDMODE=${SCB_APPENDMODE:-0}
 # Set APPID used for current game config
 SCB_APPID=${SCB_APPID:-}
 
-# By default we will never be in gamemode
-SCB_GAMEMODE=0
-
 # Default off for SCB_DEBUG
 SCB_DEBUG=${SCB_DEBUG:-0}
 
@@ -64,9 +61,19 @@ SCB_AUTO_VRR=${SCB_AUTO_VRR:-0}
 SCB_AUTO_REFRESH=${SCB_AUTO_REFRESH:-0}
 SCB_AUTO_FRAME_LIMIT=${SCB_AUTO_FRAME_LIMIT:-0}
 
+# We want to ignore -e and --steam gamescope flags as they are currently broken and crash gamescope
+SCB_STEAMARGIGNORE=${SCB_STEAMARGIGNORE:-1}
+
+############
+# Constants
+############
+# By default we will never be in gamemode
+SCB_GAMEMODE=0
+
 # Helper to determine get if any of the SCB_AUTO_* features are enabled
 # 0 = none enabled, >0 means at least one is enabled
 SCB_ANY_AUTO_FEAT_ENABLED=$(( SCB_AUTO_RES + SCB_AUTO_HDR + SCB_AUTO_VRR + SCB_AUTO_REFRESH + SCB_AUTO_FRAME_LIMIT ))
+
 ###################
 # Helper functions
 ###################
@@ -409,9 +416,16 @@ while [[ $# -gt 0 ]]; do
         # Exit loop when done
         break
     fi
-    # Add arg to gamescope_opts and go to next loop
-    gamescope_opts+=" $1"
-    shift
+
+    # If the steam arg ignore function is enabled, ignore the -e and --steam flag in gamescope
+    if [ "$1" == "-e" ] || [ "$1" == "--steam" ] && [ "$SCB_STEAMARGIGNORE" == "1" ]; then
+        echo "Ignoring $1 flag for gamescope as it is currently broken"
+        shift
+    else
+        # Add arg to gamescope_opts and go to next loop
+        gamescope_opts+=" $1"
+        shift
+    fi
 done
 
 # If $SCB_APPID is not set, attempt to auto detect APPID for Steam
