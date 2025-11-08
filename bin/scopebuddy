@@ -19,7 +19,7 @@ set -eo pipefail
 ##########
 # Globals
 ##########
-SCB_VER="1.2.3"
+SCB_VER="1.2.4"
 
 gamescope_opts=""
 command=""
@@ -407,9 +407,9 @@ while [[ $# -gt 0 ]]; do
         shift
         # Add remaining args as individually double quoted args (should stop double quoting being a requirement)
         while [[ $# -gt 0 ]]; do
-            # command variable has to be formated like this otherwise the %command% will not launch
+            # command variable has to be formated like this and $1 has to be escaped otherwise the %command% will not launch
             # shellcheck disable=SC2089
-            command+=" \"$1\""
+            command+=" \"$(printf "%q" "$1")\""
             shift
         done
         
@@ -687,5 +687,5 @@ else
     fi
     # run pre_command before gamescope gets exec'd. will proceed even if pre_command fails.
     pre_command
-    eval "env -u LD_PRELOAD $GAMESCOPE_BIN $gamescope_opts -- env LD_PRELOAD=$LD_PRELOAD_REAL $command"
+    eval "env -u LD_PRELOAD $GAMESCOPE_BIN $gamescope_opts -- env LD_PRELOAD=\"$LD_PRELOAD_REAL\" $command"
 fi
