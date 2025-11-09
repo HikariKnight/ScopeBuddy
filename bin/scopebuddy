@@ -19,7 +19,7 @@ set -eo pipefail
 ##########
 # Globals
 ##########
-SCB_VER="1.2.4"
+SCB_VER="1.2.5"
 
 gamescope_opts=""
 command=""
@@ -407,9 +407,15 @@ while [[ $# -gt 0 ]]; do
         shift
         # Add remaining args as individually double quoted args (should stop double quoting being a requirement)
         while [[ $# -gt 0 ]]; do
-            # command variable has to be formated like this and $1 has to be escaped otherwise the %command% will not launch
-            # shellcheck disable=SC2089
-            command+=" \"$(printf "%q" "$1")\""
+            # Wrap each entry in %command% in quotes to make it easier for scripting
+            # Escape the last \ in $1 if the last character is \ otherwise the %command% will not launch
+            if [[ "$1" =~ \\$ ]]; then
+                # shellcheck disable=SC2089
+                command+=" \"$(echo "$1" | sed -E 's/\\$/\\\\/')\""
+            else
+                # shellcheck disable=SC2089
+                command+=" \"$1\""
+            fi
             shift
         done
         
@@ -679,7 +685,7 @@ else
     LD_PRELOAD_REAL=$LD_PRELOAD
 
     # Unset LD_PRELOAD for gamescope (as it breaks the overlay) then start gamescope with LD_PRELOAD set for %command% instead
-    LOGLINE="Launching: env -u LD_PRELOAD $GAMESCOPE_BIN $gamescope_opts -- env LD_PRELOAD=$LD_PRELOAD_REAL $command"
+    LOGLINE="Launching: env -u LD_PRELOAD $GAMESCOPE_BIN $gamescope_opts -- env LD_PRELOAD=\"$LD_PRELOAD_REAL\" $command"
     echo "$LOGLINE"
     if [ "$SCB_DEBUG" -eq 1 ]; then
         SCB_LOGFILE="$SCB_CONFIGDIR/scopebuddy.log"
