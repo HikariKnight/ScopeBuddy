@@ -685,7 +685,7 @@ else
     LD_PRELOAD_REAL=$LD_PRELOAD
 
     # Unset LD_PRELOAD for gamescope (as it breaks the overlay) then start gamescope with LD_PRELOAD set for %command% instead
-    LOGLINE="Launching: env -u LD_PRELOAD $GAMESCOPE_BIN $gamescope_opts -- env LD_PRELOAD=\"$LD_PRELOAD_REAL\" $command"
+    LOGLINE="Launching: env -u LD_PRELOAD $GAMESCOPE_BIN $gamescope_opts -- env LD_PRELOAD=\"$LD_PRELOAD_REAL\" $(echo "$command" | sed -E 's/\\" /\\\\" /g')"
     echo "$LOGLINE"
     if [ "$SCB_DEBUG" -eq 1 ]; then
         SCB_LOGFILE="$SCB_CONFIGDIR/scopebuddy.log"
