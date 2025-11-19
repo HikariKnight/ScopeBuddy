@@ -380,6 +380,14 @@ nonsteam_appid_detect() {
 # Main
 #######
 echo "Running ScopeBuddy version: $SCB_VER"
+
+# If gamescope is not found, force SCB_NOSCOPE to 1
+if ! command -v "$GAMESCOPE_BIN" >/dev/null 2>&1; then
+    echo "Setting SCB_NOSCOPE=1 because gamescope was not found"
+    SCB_NOSCOPE=1
+fi
+
+
 # If SCB_NOSCOPE is set to 1 and we are not using a custom SCB_CONF
 if [ "$SCB_NOSCOPE" -eq 1 ] && [ "$SCB_CONF" == "scb.conf" ]; then
     # Use noscope.conf for default values
