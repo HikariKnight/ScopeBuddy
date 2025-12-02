@@ -202,6 +202,19 @@ gnome_randr_auto_args_preflight() {
     fi
     return 0
 }
+# Validates capability to run $SCB_AUTO_* on a Wlroots compositor
+# Returns 0 if dependencies are met, 1 otherwise (silent check).
+wlr_auto_args_preflight() {
+    # Check that jq is available
+    if ! command -v jq >/dev/null 2>&1; then
+        return 1
+    fi
+    # Check that wlr-randr is available
+    if ! command -v "wlr-randr" >/dev/null 2>&1; then
+        return 1
+    fi
+    return 0
+}
 # Gets the user's primary display via kscreen-doctor.
 # Returns a single kscreen JSON object for the display obj.
 kde_get_primary_display() {
@@ -346,6 +359,30 @@ gnome_randr_check_vrr() {
     ')
     echo "$vrr_result"
 }
+# Gets the user's primary display via wlr-randr for Wlroots
+# Returns a single JSON object for the display.
+wlr_get_primary_display() {
+    # we want to respect user settings for -O or --prefer-output.
+    # if so, just get that by connector name.
+    local prefer="$1"
+    # shellcheck disable=SC2155
+    local gdctl_output=$("wlr-randr" --json)
+    if [ -n "$prefer" ]; then
+        # Try to select the output by its connector name
+        echo "$gdctl_output" | jq -c --arg prefer "$prefer" '
+            .[] | select(.name == $prefer)
+        '
+    else
+        show_error_dialog "Wlroots Error" "Primary display not supported!" 1
+    fi
+}
+# Selectively extracts mode info from wlr-randr for use with SCB_AUTO_*.
+wlr_get_mode_info() {
+    local prefer="$1"
+    wlr_get_primary_display "$prefer" | jq -r '
+        .modes[] | select(.current == true) | {width: .width, height: .height, refresh: .refresh}
+    '
+}
 # Check for non-steam appid patterns and return an standardized auto value for SCB_APPID
 nonsteam_appid_detect() {
     local command="$1"
@@ -485,6 +522,8 @@ if [ -f "$SCB_CONFIGFILE" ]; then
         SCB_DETECT="gnome_gdctl"
     elif gnome_randr_auto_args_preflight; then
         SCB_DETECT="gnome_randr"
+    elif wlr_auto_args_preflight; then
+        SCB_DETECT="wlroots"
     else
         SCB_DETECT="none"
     fi
@@ -509,6 +548,7 @@ Please disable these flags in your ScopeBuddy configuration.
 Required dependencies:
   • KDE Plasma: kscreen-doctor and jq
   • GNOME: gdctl (with --format=json) or gnome-randr
+  • Wlroots: wlr-randr (with --json)
 
 Current desktop: ${XDG_CURRENT_DESKTOP:-not set}
 Session: ${DESKTOP_SESSION:-not set}
@@ -532,6 +572,11 @@ https://github.com/HikariKnight/ScopeBuddy#auto-detection-features-scb_auto_"
         elif [ "$SCB_DETECT" = "gnome_randr" ]; then
             # width/height are mode-specific values from GNOME via gnome-randr
             MODE_INFO=$(gnome_randr_get_mode_info "$PREFER_OUTPUT")
+            WIDTH=$(echo "$MODE_INFO" | jq -r '.width')
+            HEIGHT=$(echo "$MODE_INFO" | jq -r '.height')
+        elif [ "$SCB_DETECT" = "wlroots" ]; then
+            # width/height are mode-specific values from GNOME via gnome-randr
+            MODE_INFO=$(wlr_get_mode_info "$PREFER_OUTPUT")
             WIDTH=$(echo "$MODE_INFO" | jq -r '.width')
             HEIGHT=$(echo "$MODE_INFO" | jq -r '.height')
         else
@@ -562,6 +607,10 @@ https://github.com/HikariKnight/ScopeBuddy#auto-detection-features-scb_auto_"
             if [[ "$GNOME_RANDR_HDR_STATE" == "1" ]]; then
                 gamescope_opts=$(verify_or_append_arg "$gamescope_opts" "--hdr-enabled")
             fi
+        elif [ "$SCB_DETECT" = "wlroots" ]; then
+            # Check if HDR is enabled on Wlroots (color-mode: 1 indicates HDR/bt2100)
+            CONNECTOR=$(wlr_get_primary_display "$PREFER_OUTPUT" 2>/dev/null)
+            # TODO: Not supported; stub for future support
         fi
     fi
     if [ "$SCB_AUTO_VRR" -eq 1 ]; then
@@ -582,6 +631,12 @@ https://github.com/HikariKnight/ScopeBuddy#auto-detection-features-scb_auto_"
             if [[ "$GNOME_RANDR_VRR_STATE" == "true" ]]; then
                 gamescope_opts=$(verify_or_append_arg "$gamescope_opts" "--adaptive-sync")
             fi
+        elif [ "$SCB_DETECT" = "wlroots" ]; then
+            # Check if VRR is enabled on Wlroots via wlr-randr (active mode has +vrr)
+            WLR_VRR_STATE=$(wlr_get_primary_display "$PREFER_OUTPUT" | jq -r '.adaptive_sync')
+            if [[ "$WLR_VRR_STATE" == "true" ]]; then
+                gamescope_opts=$(verify_or_append_arg "$gamescope_opts" "--adaptive-sync")
+            fi
         fi
     fi
     if [ "$SCB_AUTO_REFRESH" -eq 1 ]; then
@@ -591,6 +646,9 @@ https://github.com/HikariKnight/ScopeBuddy#auto-detection-features-scb_auto_"
             REFRESH_RATE=$(gnome_gdctl_get_mode_info "$PREFER_OUTPUT" | jq -r '.refresh')
         elif [ "$SCB_DETECT" = "gnome_randr" ]; then
             MODE_INFO=$(gnome_randr_get_mode_info "$PREFER_OUTPUT")
+            REFRESH_RATE=$(echo "$MODE_INFO" | jq -r '.refresh')
+        elif [ "$SCB_DETECT" = "wlroots" ]; then
+            MODE_INFO=$(wlr_get_mode_info "$PREFER_OUTPUT")
             REFRESH_RATE=$(echo "$MODE_INFO" | jq -r '.refresh')
         else
             REFRESH_RATE=""
@@ -606,6 +664,9 @@ https://github.com/HikariKnight/ScopeBuddy#auto-detection-features-scb_auto_"
             REFRESH_RATE=$(gnome_gdctl_get_mode_info "$PREFER_OUTPUT" | jq -r '.refresh')
         elif [ "$SCB_DETECT" = "gnome_randr" ]; then
             MODE_INFO=$(gnome_randr_get_mode_info "$PREFER_OUTPUT")
+            REFRESH_RATE=$(echo "$MODE_INFO" | jq -r '.refresh')
+        elif [ "$SCB_DETECT" = "wlroots" ]; then
+            MODE_INFO=$(wlr_get_mode_info "$PREFER_OUTPUT")
             REFRESH_RATE=$(echo "$MODE_INFO" | jq -r '.refresh')
         else
             REFRESH_RATE=""

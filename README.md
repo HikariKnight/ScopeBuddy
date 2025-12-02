@@ -39,6 +39,7 @@ ScopeBuddy can automatically detect your display settings and configure gamescop
 
 - **KDE Plasma**: Uses `kscreen-doctor` (requires `jq`)
 - **GNOME**: Uses either `gdctl` (requires `jq` and upstream version with `--format=json` support) or `gnome-randr` as fallback
+- **Wlroots Compositor**: Uses "wlr-randr" (requires `jq`)
 
 ### Usage Examples
 
@@ -113,6 +114,10 @@ SCB_AUTO_HDR=1
 SCB_AUTO_VRR=1
 ```
 
+### Wlroots Compositor Support
+
+Wlroots compositors do not have any concept of a primary monitor, so the monitor must be specified with gamescope's `-O` or `--prefer-output` flag. See [Multi-Monitor Support](#multi-monitor-support) for more info.
+
 ### Multi-Monitor Support
 
 If you're using multiple monitors and want to target a specific display, use gamescope's `-O` or `--prefer-output` flag:
@@ -131,6 +136,7 @@ SCB_AUTO_RES=1 scopebuddy -O DP-3 -- %command%
 Optional for `$SCB_AUTO_RES`/`$SCB_AUTO_HDR`/`$SCB_AUTO_VRR`:
 * **KDE Plasma**: `kscreen-doctor` (usually pre-installed) and `jq` (installed by default on Bazzite)
 * **GNOME**: Either `gdctl` with `--format=json` support (requires `jq`) OR `gnome-randr` (see GNOME Support section above)
+- **Wlroots Compositor**: Uses "wlr-randr" (requires `jq`)
 
 #### Using curl:
 ```bash
