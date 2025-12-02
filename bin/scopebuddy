@@ -38,6 +38,9 @@ GDCTL_COMMAND=${GDCTL_COMMAND:-gdctl}
 # Set default gnome-randr command for GNOME (alternative to gdctl)
 GNOME_RANDR_COMMAND=${GNOME_RANDR_COMMAND:-gnome-randr}
 
+# Set default wlr-randr command
+WLR_RANDR_COMMAND=${WLR_RANDR_COMMAND:-wlr-randr}
+
 # Set default home config directory
 XDG_CONFIG_HOME=${XDG_CONFIG_HOME:-$HOME/.config}
 # Configure SCB config
@@ -210,7 +213,7 @@ wlr_auto_args_preflight() {
         return 1
     fi
     # Check that wlr-randr is available
-    if ! command -v "wlr-randr" >/dev/null 2>&1; then
+    if ! command -v "$WLR_RANDR_COMMAND" >/dev/null 2>&1; then
         return 1
     fi
     return 0
@@ -366,7 +369,7 @@ wlr_get_primary_display() {
     # if so, just get that by connector name.
     local prefer="$1"
     # shellcheck disable=SC2155
-    local gdctl_output=$("wlr-randr" --json)
+    local gdctl_output=$("$WLR_RANDR_COMMAND" --json)
     if [ -n "$prefer" ]; then
         # Try to select the output by its connector name
         echo "$gdctl_output" | jq -c --arg prefer "$prefer" '
