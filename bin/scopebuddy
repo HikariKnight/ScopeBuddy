@@ -578,7 +578,7 @@ https://github.com/HikariKnight/ScopeBuddy#auto-detection-features-scb_auto_"
             WIDTH=$(echo "$MODE_INFO" | jq -r '.width')
             HEIGHT=$(echo "$MODE_INFO" | jq -r '.height')
         elif [ "$SCB_DETECT" = "wlroots" ]; then
-            # width/height are mode-specific values from GNOME via gnome-randr
+            # width/height are mode-specific values from the Wlroots compositor via wlr-randr
             MODE_INFO=$(wlr_get_mode_info "$PREFER_OUTPUT")
             WIDTH=$(echo "$MODE_INFO" | jq -r '.width')
             HEIGHT=$(echo "$MODE_INFO" | jq -r '.height')
@@ -611,7 +611,7 @@ https://github.com/HikariKnight/ScopeBuddy#auto-detection-features-scb_auto_"
                 gamescope_opts=$(verify_or_append_arg "$gamescope_opts" "--hdr-enabled")
             fi
         elif [ "$SCB_DETECT" = "wlroots" ]; then
-            # Check if HDR is enabled on Wlroots (color-mode: 1 indicates HDR/bt2100)
+            # Check if HDR is enabled on Wlroots
             CONNECTOR=$(wlr_get_primary_display "$PREFER_OUTPUT" 2>/dev/null)
             # TODO: Not supported; stub for future support
         fi
@@ -635,7 +635,7 @@ https://github.com/HikariKnight/ScopeBuddy#auto-detection-features-scb_auto_"
                 gamescope_opts=$(verify_or_append_arg "$gamescope_opts" "--adaptive-sync")
             fi
         elif [ "$SCB_DETECT" = "wlroots" ]; then
-            # Check if VRR is enabled on Wlroots via wlr-randr (active mode has +vrr)
+            # Check if VRR is enabled on Wlroots via wlr-randr
             WLR_VRR_STATE=$(wlr_get_primary_display "$PREFER_OUTPUT" | jq -r '.adaptive_sync')
             if [[ "$WLR_VRR_STATE" == "true" ]]; then
                 gamescope_opts=$(verify_or_append_arg "$gamescope_opts" "--adaptive-sync")
