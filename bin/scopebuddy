@@ -753,6 +753,15 @@ if [ "$SCB_NOSCOPE" -eq 1 ]; then
         # Force MANGOHUD=0
         export MANGOHUD=0
     fi
+
+    # Write logfile if SCB_DEBUG is enabled
+    LOGLINE="Launching: $(echo "$command" | sed -E 's/\\" /\\\\" /g')"
+    echo "$LOGLINE"
+    if [ "$SCB_DEBUG" -eq 1 ]; then
+        SCB_LOGFILE="$SCB_CONFIGDIR/scopebuddy.log"
+        echo -e "$LOGLINE" > "$SCB_LOGFILE"
+    fi
+
     # Launch %command% without gamescope
     eval "$command"
 else
