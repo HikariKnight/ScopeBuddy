@@ -765,13 +765,13 @@ if [ "$SCB_NOSCOPE" -eq 1 ]; then
     # Launch %command% without gamescope
     eval "$command"
 else
-    # Transfer LD_PRELOAD before we unset it
-    LD_PRELOAD_REAL=$LD_PRELOAD
+    # Set LD_PRELOAD_REAL to empty
+    LD_PRELOAD_REAL=""
 
-    # If user does not want the Steam overlay and input fixed
-    if [ "$SCB_NESTEDFIX" -eq 0 ]; then
-        # Empty the LD_PRELOAD_REAL so that LD_PRELOAD will be unset
-        LD_PRELOAD_REAL=""
+    # Apply nested gamescope fix for steam overlay and steam input
+    if [ "$SCB_NESTEDFIX" -eq 1 ]; then
+        # Transfer LD_PRELOAD before we unset it
+        LD_PRELOAD_REAL=$LD_PRELOAD
     fi
 
     # Unset LD_PRELOAD for gamescope (as it breaks the overlay) then start gamescope with LD_PRELOAD set for %command% instead
