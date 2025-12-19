@@ -19,7 +19,7 @@ set -eo pipefail
 ##########
 # Globals
 ##########
-SCB_VER="1.3.0"
+SCB_VER="1.3.1"
 
 gamescope_opts=""
 command=""
@@ -66,6 +66,10 @@ SCB_AUTO_FRAME_LIMIT=${SCB_AUTO_FRAME_LIMIT:-0}
 
 # We want to ignore -e and --steam gamescope flags as they are currently broken and crash gamescope
 SCB_STEAMARGIGNORE=${SCB_STEAMARGIGNORE:-1}
+
+# Add a variable to disable the fix for the steam overlay and steam input in nested gamescope
+# See https://xkcd.com/1172/
+SCB_NESTEDFIX=${SCB_NESTEDFIX:-1}
 
 ############
 # Constants
@@ -750,11 +754,26 @@ if [ "$SCB_NOSCOPE" -eq 1 ]; then
         # Force MANGOHUD=0
         export MANGOHUD=0
     fi
+
+    # Write logfile if SCB_DEBUG is enabled
+    LOGLINE="Launching: $(echo "$command" | sed -E 's/\\" /\\\\" /g')"
+    echo "$LOGLINE"
+    if [ "$SCB_DEBUG" -eq 1 ]; then
+        SCB_LOGFILE="$SCB_CONFIGDIR/scopebuddy.log"
+        echo -e "$LOGLINE" > "$SCB_LOGFILE"
+    fi
+
     # Launch %command% without gamescope
     eval "$command"
 else
-    # Transfer LD_PRELOAD before we unset it
-    LD_PRELOAD_REAL=$LD_PRELOAD
+    # Set LD_PRELOAD_REAL to empty
+    LD_PRELOAD_REAL=""
+
+    # Apply nested gamescope fix for steam overlay and steam input
+    if [ "$SCB_NESTEDFIX" -eq 1 ]; then
+        # Transfer LD_PRELOAD before we unset it
+        LD_PRELOAD_REAL=$LD_PRELOAD
+    fi
 
     # Unset LD_PRELOAD for gamescope (as it breaks the overlay) then start gamescope with LD_PRELOAD set for %command% instead
     LOGLINE="Launching: env -u LD_PRELOAD $GAMESCOPE_BIN $gamescope_opts -- env LD_PRELOAD=\"$LD_PRELOAD_REAL\" $(echo "$command" | sed -E 's/\\" /\\\\" /g')"
