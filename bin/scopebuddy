@@ -68,6 +68,7 @@ SCB_AUTO_FRAME_LIMIT=${SCB_AUTO_FRAME_LIMIT:-0}
 SCB_STEAMARGIGNORE=${SCB_STEAMARGIGNORE:-1}
 
 # Add a variable to disable the fix for the steam overlay and steam input in nested gamescope
+# See https://xkcd.com/1172/
 SCB_NESTEDFIX=${SCB_NESTEDFIX:-1}
 
 ############
