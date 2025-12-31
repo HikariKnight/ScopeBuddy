@@ -163,6 +163,24 @@ sudo ln -s scopebuddy /usr/local/bin/scb
 * Move to /usr/local/bin or /usr/bin
 * make scb symlink
 
+### NixOS
+
+## Flakes (recommended)
+
+Home Manager (flake-based), add an input:
+
+```bash
+inputs.scopebuddy.url = "github:HikariKnight/ScopeBuddy";
+```
+
+Then add the package:
+
+```bash
+home.packages = [
+  inputs.scopebuddy.packages.${pkgs.system}.default
+];
+```
+
 ## GUI Configuration
 TealMango in the Bazzite community has made a GUI tool to configure scopebuddy.
 Well worth to check it out here: [ScopeBuddy-GUI](https://github.com/rfrench3/scopebuddy-gui)
