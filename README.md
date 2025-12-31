@@ -165,7 +165,7 @@ sudo ln -s scopebuddy /usr/local/bin/scb
 
 ### NixOS
 
-## Flakes (recommended)
+#### Flakes
 
 Home Manager (flake-based), add an input:
 
