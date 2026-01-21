@@ -131,7 +131,6 @@ SCB_AUTO_RES=1 scopebuddy -O DP-3 -- %command%
 ### Requirements
 * bash
 * [gamescope](https://github.com/ValveSoftware/gamescope)
-* perl
 
 Optional for `$SCB_AUTO_RES`/`$SCB_AUTO_HDR`/`$SCB_AUTO_VRR`:
 * **KDE Plasma**: `kscreen-doctor` (usually pre-installed) and `jq` (installed by default on Bazzite)

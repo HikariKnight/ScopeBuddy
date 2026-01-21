@@ -27,7 +27,6 @@
             wrapProgram $out/bin/scopebuddy \
               --prefix PATH : ${pkgs.lib.makeBinPath [
                 pkgs.gamescope
-                pkgs.perl
                 pkgs.jq
                 pkgs.wlr-randr
               ]}
