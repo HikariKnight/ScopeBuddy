@@ -125,6 +125,20 @@ If you're using multiple monitors and want to target a specific display, use gam
 ```bash
 SCB_AUTO_RES=1 scopebuddy -O DP-3 -- %command%
 ```
+### Auto HDR for games launched without Gamescope (experimental):
+
+Scopebuddy can be configured to bypass gamescope entirely using the `SCOPEBUDDY_NOSCOPE=1` variable.
+
+`SCB_AUTO_*` variables are ignored in this mode. However, HDR can be used in non-gamescope contexts using proton its experimental wayland mode.
+
+To enable Scopebuddy to inject variables to enable non-gamescope HDR, you must set the following two variables in `scb.conf`:
+
+```
+SCB_AUTO_HDR=1
+SCB_NOSCOPE_AUTO_HDR=1
+```
+
+Then in your game's launch options: `SCB_NOSCOPE=1 scb -- %command%`.
 
 ## Installation
 
