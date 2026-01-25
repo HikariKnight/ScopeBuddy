@@ -22,7 +22,6 @@ set -eo pipefail
 SCB_VER="1.3.1"
 
 gamescope_opts=""
-noscope_opts=""
 command=""
 
 # Set SCB to use gamescope by default
