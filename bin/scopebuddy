@@ -596,11 +596,10 @@ https://github.com/HikariKnight/ScopeBuddy#auto-detection-features-scb_auto_"
         fi
     fi
     if [ "$SCB_AUTO_HDR" -eq 1 ]; then
-        # Combo var to determine if wayland/non-gamescope HDR should be enabled
-        # in NOSCOPE mode.
+        # Combo var to determine if we should add wayland and wayland hdr
+        # variables in NOSCOPE mode.
         if [ "$SCB_NOSCOPE" -eq 1 ] && \
-           [ "$SCB_GAMEMODE" -eq 0 ] && \
-           [ "$SCB_NOSCOPE_AUTO_HDR" -eq 1 ]; then
+           [ "$SCB_GAMEMODE" -eq 0 ]; then
             AUTO_WAYLAND_HDR_ENABLE=1
         else
             AUTO_WAYLAND_HDR_ENABLE=0
