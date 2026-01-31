@@ -157,7 +157,7 @@ SCB_AUTO_HDR=1
 SCB_NOSCOPE=1
 ```
 
-Alternatively, `SCB_NOSCOPE` can be left out of scb.conf and set only in launch options: `SCB_NOSCOPE=1 scb -- %command%`.
+Alternatively, `SCB_NOSCOPE` can be left out of scb.conf and set in either a game-specific scb.conf file or directly launch options: `SCB_NOSCOPE=1 scb -- %command%`.
 
 ## Installation
 
