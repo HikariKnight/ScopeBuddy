@@ -596,16 +596,32 @@ https://github.com/HikariKnight/ScopeBuddy#auto-detection-features-scb_auto_"
         fi
     fi
     if [ "$SCB_AUTO_HDR" -eq 1 ]; then
+        # Combo var to determine if we should add wayland and wayland hdr
+        # variables in NOSCOPE mode.
+        if [ "$SCB_NOSCOPE" -eq 1 ] && \
+           [ "$SCB_GAMEMODE" -eq 0 ]; then
+            AUTO_WAYLAND_HDR_ENABLE=1
+        else
+            AUTO_WAYLAND_HDR_ENABLE=0
+        fi
         if [ "$SCB_DETECT" = "kde" ]; then
             KDE_HDR_STATE=$(kde_get_primary_display "$PREFER_OUTPUT" | jq -r '.hdr')
             if [[ "$KDE_HDR_STATE" == "true" ]]; then
                 gamescope_opts=$(verify_or_append_arg "$gamescope_opts" "--hdr-enabled")
+            fi
+            if [ "$AUTO_WAYLAND_HDR_ENABLE" -eq 1 ]; then
+                export PROTON_ENABLE_WAYLAND=1
+                export PROTON_ENABLE_HDR=1
             fi
         elif [ "$SCB_DETECT" = "gnome_gdctl" ]; then
             # Check if HDR is enabled on GNOME via gdctl (bt2100 color mode indicates HDR)
             GNOME_GDCTL_HDR_STATE=$(gnome_gdctl_get_primary_display "$PREFER_OUTPUT" | jq -r '."color-mode"')
             if [[ "$GNOME_GDCTL_HDR_STATE" == "bt2100" ]]; then
                 gamescope_opts=$(verify_or_append_arg "$gamescope_opts" "--hdr-enabled")
+            fi
+            if [ "$AUTO_WAYLAND_HDR_ENABLE" -eq 1 ]; then
+                export PROTON_ENABLE_WAYLAND=1
+                export PROTON_ENABLE_HDR=1
             fi
         elif [ "$SCB_DETECT" = "gnome_randr" ]; then
             # Check if HDR is enabled on GNOME via gnome-randr (color-mode: 1 indicates HDR/bt2100)
@@ -614,10 +630,18 @@ https://github.com/HikariKnight/ScopeBuddy#auto-detection-features-scb_auto_"
             if [[ "$GNOME_RANDR_HDR_STATE" == "1" ]]; then
                 gamescope_opts=$(verify_or_append_arg "$gamescope_opts" "--hdr-enabled")
             fi
+            if [ "$AUTO_WAYLAND_HDR_ENABLE" -eq 1 ]; then
+                export PROTON_ENABLE_WAYLAND=1
+                export PROTON_ENABLE_HDR=1
+            fi
         elif [ "$SCB_DETECT" = "wlroots" ]; then
             # Check if HDR is enabled on Wlroots
             CONNECTOR=$(wlr_get_primary_display "$PREFER_OUTPUT" 2>/dev/null)
             # TODO: Not supported; stub for future support
+            if [ "$AUTO_WAYLAND_HDR_ENABLE" -eq 1 ]; then
+                export PROTON_ENABLE_WAYLAND=1
+                export PROTON_ENABLE_HDR=1
+            fi
         fi
     fi
     if [ "$SCB_AUTO_VRR" -eq 1 ]; then
@@ -711,6 +735,11 @@ else
 #SCB_AUTO_RES=1
 #SCB_AUTO_HDR=1
 #SCB_AUTO_VRR=1
+# AUTO_HDR can also be applied without gamescope when running in NOSCOPE mode, however, this requires a Proton
+# version with wayland HDR support. This will automatically add PROTON_ENABLE_WAYLAND and PROTON_ENABLE_HDR to env.
+# Note that this WILL cause your game to run in wayland mode, which will break the steam overlay.
+# An additional variable is required to enable this behavior (SCB_AUTO_HDR must also be set to 1):
+#SCB_NOSCOPE_AUTO_HDR=1
 # For GNOME users: you can use either gdctl or gnome-randr for auto-detection
 # gdctl requires upstream version with --format=json support (will be tested automatically)
 # gnome-randr will be used as fallback if gdctl test fails
